@@ -1,0 +1,15 @@
+{
+  "version": "0.1.0",
+  "workspaceRoot": "/Users/sairamugge/Desktop/ContextOS",
+  "defaultOrg": "personal",
+  "contextRules": {
+    "isolation": true,
+    "inheritance": "explicit",
+    "crossProjectAccess": false
+  },
+  "agentRouting": {
+    "root": ["soul.md", "personality.md"],
+    "project": ["CONTEXT.md", "memory.md"],
+    "org": ["standards.md", "tools.md"]
+  }
+}
