@@ -55,3 +55,22 @@ Never dump files directly into the root. Every file must have a designated "Ring
 ### 2. Un-indexed Memory Blocks
 
 Do not create complex knowledge structures without updating the Master Index (`WORKSPACE.md`).
+
+---
+
+## 🚀 Self-Improvement Protocol (Gravity V2 Upgrade)
+
+### 1. The Double-Hook Loop
+
+Every agent session must now follow the **Double-Hook** workflow:
+
+- **Hook 1 (Start)**: Load the `AGENTS_LEARNING.md` file immediately after `WORKSPACE.md`.
+- **Hook 2 (End)**: Before ending the session, summarize all new technical debt, architectural decisions, and error-mitigation patterns into this file.
+
+### 2. Recursive Intelligence
+
+Agents are required to "Upgrade" their operational baseline by checking this file for task-specific anti-patterns before executing any `run_command` or `write_to_file` operations.
+
+### 3. Cross-Agent Handoff
+
+Treat this file as the primary handoff mechanism. If a task is interrupted, the latest entry here must provide the next agent with the "Mental Model" of the current problem state.
