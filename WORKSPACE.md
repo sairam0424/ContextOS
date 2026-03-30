@@ -20,9 +20,12 @@ This is the **Personal Workspace Context OS**. A file-first, agent-centric archi
 ## 📝 Context Loading Rules
 1. **Always read** `root/soul.md` and `root/personality.md` at the start of any new session.
 2. **Prioritize local project-level context** (`CONTEXT.md`, `memory.md`) within project folders.
-3. **Log status updates** daily in `daily/` using `config/templates/daily-log.md`.
+3. **Internalize Past Learnings**: Read `AGENTS_LEARNING.md` to prevent repeating past mistakes.
+4. **Log status updates** daily in `daily/` using `config/templates/daily-log.md`.
 
 ## 🤖 Agent Usage Instructions
 - **Read before speaking**: Always check the root context before making architectural assumptions.
 - **Record decisions**: Any major deviation from the original plan should be recorded in `root/decisions.md`.
 - **Maintain purity**: Do not create non-standard directories outside the defined scaffolding.
+
+
