@@ -77,15 +77,15 @@ Treat this file as the primary handoff mechanism. If a task is interrupted, the 
 
 ---
 
-## Session Notes — 2026-03-31
+## Session Notes — 2026-03-31 (Day 4)
 
 ### New Insights
-- Writing to `~/.workspace` requires elevated permissions in this environment; plan for explicit approvals.
-- Creating time-series memory assets outside the repo avoids unindexed root changes but still needs sandbox escalation.
+- Project isolation is safest when CLAUDE.md references exist within ~/.workspace; create root/org stubs to avoid broken loads.
+- Use create-if-missing guards to maintain idempotency and avoid overwriting context files.
 
 ### Decisions
-- Implemented Day 3 memory scaffolding directly in `~/.workspace` to match spec rather than creating a new top-level directory in the repo.
+- Established first isolated project at ~/.workspace/projects/context-os with explicit context loading rules.
 
 ### Patterns to Reuse
-- Compute ISO week from date to keep weekly filenames consistent.
-- Keep daily logs concise with one activity entry and explicit “Context for Tomorrow” to support handoff.
+- Copy CLAUDE.md to AGENTS.md to keep agent rules in sync.
+- Ensure tasks/active.md and tasks/backlog.md are populated to prevent empty-task ambiguity.
