@@ -74,3 +74,18 @@ Agents are required to "Upgrade" their operational baseline by checking this fil
 ### 3. Cross-Agent Handoff
 
 Treat this file as the primary handoff mechanism. If a task is interrupted, the latest entry here must provide the next agent with the "Mental Model" of the current problem state.
+
+---
+
+## Session Notes — 2026-03-31 (Day 4)
+
+### New Insights
+- Project isolation is safest when CLAUDE.md references exist within ~/.workspace; create root/org stubs to avoid broken loads.
+- Use create-if-missing guards to maintain idempotency and avoid overwriting context files.
+
+### Decisions
+- Established first isolated project at ~/.workspace/projects/context-os with explicit context loading rules.
+
+### Patterns to Reuse
+- Copy CLAUDE.md to AGENTS.md to keep agent rules in sync.
+- Ensure tasks/active.md and tasks/backlog.md are populated to prevent empty-task ambiguity.
