@@ -74,3 +74,18 @@ Agents are required to "Upgrade" their operational baseline by checking this fil
 ### 3. Cross-Agent Handoff
 
 Treat this file as the primary handoff mechanism. If a task is interrupted, the latest entry here must provide the next agent with the "Mental Model" of the current problem state.
+
+---
+
+## Session Notes — 2026-03-31
+
+### New Insights
+- Writing to `~/.workspace` requires elevated permissions in this environment; plan for explicit approvals.
+- Creating time-series memory assets outside the repo avoids unindexed root changes but still needs sandbox escalation.
+
+### Decisions
+- Implemented Day 3 memory scaffolding directly in `~/.workspace` to match spec rather than creating a new top-level directory in the repo.
+
+### Patterns to Reuse
+- Compute ISO week from date to keep weekly filenames consistent.
+- Keep daily logs concise with one activity entry and explicit “Context for Tomorrow” to support handoff.
