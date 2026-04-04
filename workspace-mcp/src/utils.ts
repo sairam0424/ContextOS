@@ -3,19 +3,19 @@ import fs from "fs";
 import { spawn } from "child_process";
 
 // Discover workspace root by looking for soul.md in parent directories
-function findWorkspaceRoot() {
+export function findWorkspaceRoot() {
   let current = process.cwd();
   const root = "/";
   while (current !== root) {
     if (fs.existsSync(path.join(current, "root", "soul.md"))) {
-      return current;
+      return fs.realpathSync(current);
     }
     current = path.dirname(current);
   }
-  return process.cwd(); // Fallback to CWD
+  return fs.realpathSync(process.cwd()); // Fallback to CWD
 }
 
-const workspaceRoot = findWorkspaceRoot();
+export const workspaceRoot = findWorkspaceRoot();
 
 const ALLOWED_ROOTS = [
   path.join(workspaceRoot, "projects"),
@@ -28,18 +28,19 @@ const ALLOWED_ROOTS = [
 ];
 
 export function validatePath(requestedPath: string) {
-  const fullPath = path.resolve(workspaceRoot, requestedPath);
+  const fullPath = fs.realpathSync(path.resolve(workspaceRoot, requestedPath));
   const relativePath = path.relative(workspaceRoot, fullPath);
 
   // Security check: must be within the workspace root
-  if (relativePath.startsWith("..") || path.isAbsolute(requestedPath)) {
-      if (!fullPath.startsWith(workspaceRoot)) {
-        throw new Error(`Security violation: Path ${requestedPath} is outside the allowed ContextOS workspace roots.`);
-      }
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    throw new Error(`Security violation: Path ${requestedPath} is outside the allowed ContextOS workspace root.`);
   }
 
   // Enterprise check: must be within an allowed bucket
-  const isAllowed = ALLOWED_ROOTS.some(root => fullPath.startsWith(root));
+  const isAllowed = ALLOWED_ROOTS.some(root => {
+    const bucketRelative = path.relative(root, fullPath);
+    return !bucketRelative.startsWith("..") && !path.isAbsolute(bucketRelative);
+  });
   
   if (!isAllowed) {
     throw new Error(`Security violation: Path ${requestedPath} is outside the allowed bucket (projects, orgs, knowledge, schemas, etc).`);

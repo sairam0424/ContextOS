@@ -1,9 +1,10 @@
+import fs from "fs";
 import { expect } from "chai";
-import { validatePath } from "../utils.js";
+import { validatePath, findWorkspaceRoot } from "../utils.js";
 import path from "path";
 
 describe("Security Isolation Tests", () => {
-  const workspaceRoot = process.cwd();
+  const workspaceRoot = findWorkspaceRoot();
 
   it("should allow paths within projects directory", () => {
     const validPath = path.join(workspaceRoot, "projects", "ContextOS", "memory.md");
