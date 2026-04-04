@@ -9,27 +9,62 @@ This guide describes how to integrate ContextOS into your daily development work
 ContextOS is designed to capture the "Delta" of your thinking. Follow these three steps every day to maintain a perfect project memory.
 
 ### 🌅 Phase 1: Morning Onboarding
+
 When starting work, tell the system your goals. This updates the "Hot" memory for the day.
+
 ```bash
 # Using the CLI
 workspace today my-project "Implementing the new payment gateway"
 ```
+
 *Agents will now see this goal at the top of every context read.*
 
 ### 🛠️ Phase 2: Active Development
+
 As you work with AI agents (Cursor, Claude, etc.), they will use the MCP server to autonomously read from `projects/` and `knowledge/`.
 
 If you make a major architectural decision, record it immediately:
+
 ```bash
 workspace decide my-project "Use Redis for session caching" "Need sub-millisecond latency" "Accepted" "High scale requirements"
 ```
 
 ### 🌇 Phase 3: Evening Sync (Saving Your Soul)
+
 Before finishing, run the sync command. This takes your raw daily logs and "compresses" them into long-term project memory.
+
 ```bash
 workspace sync my-project
 ```
-*This keeps your context window clean and prevents "context rot" over time.*
+
+#### 🔄 How the Sync Engine Works
+
+When you run `sync`, ContextOS performs a **Context Extraction**:
+
+1. **Scanning**: It reads every `.md` file in `daily/` that hasn't been archived yet.
+2. **Structuring**: It identifies **Decisions** (ADRs), **Key Changes**, and **Knowledge Nuggets**.
+3. **Merging**: It intelligently appends or updates `memory.md` and `context.md`.
+4. **Cleaning**: Once the data is moved to "Warm" memory, the raw files are moved to `archive/` to keep your workspace clutter-free.
+
+---
+
+## 🔗 Attaching Agents to ContextOS
+
+To truly unlock the power of ContextOS, you need to "Attach" your AI agents so they can autonomously update your workspace.
+
+### How an Agent "Writes" to your Workspace
+
+When an agent is attached via MCP, it doesn't just read files; it acts as a **Context Steward**.
+
+1. **Step 1: Agent Awareness**: Tell the agent "I'm using ContextOS. Please use the `workspace_daily_update` tool to log your progress."
+2. **Step 2: Real-time Logging**: As the agent works, it will automatically call `workspace_daily_update` instead of just telling you in the chat. This stores its "thought process" directly in your `daily/` folder.
+3. **Step 3: Structural Requests**: If you tell an agent to "Update my project architecture," it will use `workspace_memory_update` to refine your `memory.md`.
+
+### Attaching manually (The "Agent Prompt" Method)
+
+If you aren't using a direct MCP-aware IDE like Cursor, you can still attach an agent by pasting this into its system prompt:
+
+> "You have access to a ContextOS workspace. Before making major changes, check `context.md` for dependencies. After completing a task, use `workspace_daily_update` to record your actions."
 
 ---
 
@@ -38,20 +73,26 @@ workspace sync my-project
 ContextOS works with any agent that supports the **Model Context Protocol (MCP)**.
 
 ### 👽 Antigravity
+
 I (Antigravity) am natively aware of ContextOS. To use it with me:
+
 1. Ensure the workspace is initialized.
 2. Ask me: "What is the context for my-project?" or "Update the project memory with my latest work."
 
 ### 🖱️ Cursor
+
 1. Go to **Settings** → **Features** → **MCP**.
 2. Click **+ Add New MCP Server**.
 3. **Name**: `ContextOS`
 4. **Type**: `command`
 5. **Command**: `node /absolute/path/to/ContextOS/workspace-mcp/dist/index.js`
+
 *Cursor will now automatically include project context in your 'Composer' sessions.*
 
 ### 🤖 Claude Code
+
 Add ContextOS to your `claude_desktop_config.json`:
+
 ```json
 {
   "mcpServers": {
