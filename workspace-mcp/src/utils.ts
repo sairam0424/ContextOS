@@ -28,7 +28,17 @@ const ALLOWED_ROOTS = [
 ];
 
 export function validatePath(requestedPath: string) {
-  const fullPath = fs.realpathSync(path.resolve(workspaceRoot, requestedPath));
+  // Resolve the path relative to workspace root first
+  const resolvedPath = path.resolve(workspaceRoot, requestedPath);
+  
+  // Try to get the real path to handle symlinks, but fall back to the resolved path if it doesn't exist
+  let fullPath: string;
+  try {
+    fullPath = fs.realpathSync(resolvedPath);
+  } catch (e) {
+    fullPath = resolvedPath;
+  }
+
   const relativePath = path.relative(workspaceRoot, fullPath);
 
   // Security check: must be within the workspace root

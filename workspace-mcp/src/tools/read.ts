@@ -15,7 +15,8 @@ export function registerReadTool(server: McpServer) {
         const { fullPath } = validatePath(`${scope}/${filePath}`);
         const data = await fs.readFile(fullPath, "utf-8");
         return {
-          content: [{ type: "text" as const, text: data }]
+          content: [{ type: "text" as const, text: data }],
+          isError: false as const
         };
       } catch (error: any) {
         return handleToolError(error);

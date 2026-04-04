@@ -1,0 +1,89 @@
+# 📕 ContextOS User Guide
+
+This guide describes how to integrate ContextOS into your daily development workflow and connect it with your favorite AI agents.
+
+---
+
+## 🛠️ Daily Development Lifecycle
+
+ContextOS is designed to capture the "Delta" of your thinking. Follow these three steps every day to maintain a perfect project memory.
+
+### 🌅 Phase 1: Morning Onboarding
+When starting work, tell the system your goals. This updates the "Hot" memory for the day.
+```bash
+# Using the CLI
+workspace today my-project "Implementing the new payment gateway"
+```
+*Agents will now see this goal at the top of every context read.*
+
+### 🛠️ Phase 2: Active Development
+As you work with AI agents (Cursor, Claude, etc.), they will use the MCP server to autonomously read from `projects/` and `knowledge/`.
+
+If you make a major architectural decision, record it immediately:
+```bash
+workspace decide my-project "Use Redis for session caching" "Need sub-millisecond latency" "Accepted" "High scale requirements"
+```
+
+### 🌇 Phase 3: Evening Sync (Saving Your Soul)
+Before finishing, run the sync command. This takes your raw daily logs and "compresses" them into long-term project memory.
+```bash
+workspace sync my-project
+```
+*This keeps your context window clean and prevents "context rot" over time.*
+
+---
+
+## 🔌 IDE Integrations
+
+ContextOS works with any agent that supports the **Model Context Protocol (MCP)**.
+
+### 👽 Antigravity
+I (Antigravity) am natively aware of ContextOS. To use it with me:
+1. Ensure the workspace is initialized.
+2. Ask me: "What is the context for my-project?" or "Update the project memory with my latest work."
+
+### 🖱️ Cursor
+1. Go to **Settings** → **Features** → **MCP**.
+2. Click **+ Add New MCP Server**.
+3. **Name**: `ContextOS`
+4. **Type**: `command`
+5. **Command**: `node /absolute/path/to/ContextOS/workspace-mcp/dist/index.js`
+*Cursor will now automatically include project context in your 'Composer' sessions.*
+
+### 🤖 Claude Code
+Add ContextOS to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "context-os": {
+      "command": "node",
+      "args": ["/absolute/path/to/ContextOS/workspace-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+---
+
+## 🔒 Security & Protection
+
+ContextOS enforces several protection layers that you should be aware of:
+
+> [!IMPORTANT]
+> **Read-Only Buckets**: AI agents can READ from `knowledge/` and `schemas/`, but they are strictly forbidden from WRITING to them. This prevents "Agentic Drifting" where an AI might accidentally rewrite your core principles or domain knowledge.
+
+> [!WARNING]
+> **Path Isolation**: The MCP server automatically blocks any attempt to traverse outside the workspace. If an agent tries to read your `~/.ssh` or `~/Documents`, the request will be instantly rejected.
+
+---
+
+## ❓ FAQ
+
+**Q: My agent says it can't find 'soul.md'.**
+A: Ensure you have initialized the project with `workspace init <name>`.
+
+**Q: Can I use this with multiple projects?**
+A: Yes! ContextOS is designed to handle multiple project directories within the `projects/` bucket. Each represents a separate "Context Partition."
+
+**Q: How do I backup my context?**
+A: ContextOS uses standard Git. Simply push your root repository to a private remote.

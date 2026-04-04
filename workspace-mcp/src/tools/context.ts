@@ -27,7 +27,8 @@ export function registerContextTool(server: McpServer) {
         }
 
         return {
-          content: [{ type: "text" as const, text: content }]
+          content: [{ type: "text" as const, text: content }],
+          isError: false as const
         };
       } catch (error: any) {
         return handleToolError(error);

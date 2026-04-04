@@ -1,17 +1,63 @@
-# Personal Workspace Context OS
+# 🚀 ContextOS
 
-Welcome to your Personal Workspace Context OS. This is a file-first, agent-centric architecture designed for seamless context loading, project management, and long-term knowledge retention.
+> **The Enterprise-Grade Intelligence Layer for Autonomous AI Agents.**
 
-## 🎯 Purpose
-To provide a structured, idempotent, and highly readable environment for both human users and AI agents.
+ContextOS is a multi-layered infrastructure designed to bridge the gap between raw development activity and structured, actionable AI context. It provides a specialized set of tools (CLI & MCP) to help developers and AI agents maintain a project's "soul," long-term memory, and architectural integrity.
 
-## 🏗️ Structure Overview
-- **root/**: Core identity and decision logs (`soul.md`, `personality.md`).
-- **daily/**: Time-series logs (daily, weekly, monthly).
-- **projects/**: Active and archived project workspaces.
-- **skills/**: Specialized knowledge and agent instructions.
-- **knowledge/**: Domains, references, and synthesized learnings.
-- **config/**: System configuration and templates.
+---
 
-## 🤖 Agent Usage
-Agents should prioritize reading `WORKSPACE.md` to understand the current scope and context loading rules.
+## 🏗️ Core Pillars
+
+*   **Intelligence Layer**: Automated memory lifecycle (Hot → Warm → Cold) and context compression.
+*   **Validation Layer**: Structural enforcement through JSON schemas for mission-critical context files.
+*   **Safety Layer**: "Allowed-Bucket" isolation strategy to prevent security violations and directory traversal.
+*   **Interface Layer**: Universal Model Context Protocol (MCP) server for seamless IDE integration (Cursor, Claude Code, Antigravity).
+
+---
+
+## ⚡ Quick Start
+
+### 1. Installation
+```bash
+git clone https://github.com/sair0424/ContextOS.git
+npm run install:all
+npm run build:all
+```
+
+### 2. Initialize a Project
+```bash
+cd workspace-cli
+npm start -- init my-cool-project
+```
+
+### 3. Connect your AI Agent
+Configure your MCP client (Cursor, Claude Desktop) to point to the server:
+- **Command**: `node /absolute/path/to/ContextOS/workspace-mcp/dist/index.js`
+
+---
+
+## 🛠️ Capability Matrix
+
+| Feature | CLI (`workspace`) | MCP (AI Agents) |
+| :--- | :---: | :---: |
+| Project Scaffolding | ✅ | ❌ |
+| Daily Logging | ✅ | ✅ |
+| ADR Tracking (Decisions) | ✅ | ✅ |
+| Workspace Validation | ✅ | ❌ |
+| Global Search | ✅ | ✅ |
+| Memory Pruning | ✅ | ❌ |
+| Structural Context Reads | ❌ | ✅ |
+| Autonomous Writing | ❌ | ✅ |
+
+---
+
+## 📖 Documentation
+- [**User Guide**](./USER_GUIDE.md): Getting started, daily workflows, and IDE setup.
+- [**Architecture Deep Dive**](./docs/architecture.md): System layers, security, and data flow.
+- [**CLI Reference**](./docs/cli.md): Full command breakdown.
+- [**MCP Reference**](./docs/mcp.md): Available tools and schemas.
+
+---
+
+## 📄 License
+MIT © [Sairam Ugge](https://github.com/sairam0424)
