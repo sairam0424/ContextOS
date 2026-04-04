@@ -14,6 +14,7 @@
     "test:cli": "cd workspace-cli && npm start -- --help",
     "test:mcp": "cd workspace-mcp && npm test",
     "test:all": "npm run test:cli && npm run test:mcp",
+    "link:all": "npm run build:all && cd workspace-cli && npm link && cd ../workspace-mcp && npm link",
     "prepare": "husky"
   },
   "devDependencies": {

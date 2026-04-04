@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ContextOS Soul Schema",
+  "description": "Schema for project SOUL.md files defining identity and values.",
+  "type": "object",
+  "required": ["Identity", "Core Principles", "Behavioral Rules"],
+  "properties": {
+    "Identity": {
+      "type": "string",
+      "description": "High-level description of the project's purpose."
+    },
+    "Core Principles": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "Behavioral Rules": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "Constraints": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

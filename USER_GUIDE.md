@@ -4,6 +4,85 @@ This guide describes how to integrate ContextOS into your daily development work
 
 ---
 
+## ⚡ Zero-Clone Quickstart (New Users)
+
+The fastest way to get started and create your own AI-powered ContextOS workspace is using **NPX**. No cloning required!
+
+```bash
+# 1. Create a workspace folder
+mkdir my-ai-context && cd my-ai-context
+
+# 2. Initialize the entire ContextOS structure
+npx @context-os/cli init
+
+# 3. Create your first project
+npx @context-os/cli init my-first-project
+```
+
+This will automatically scaffold:
+- `root/soul.md`: Your AI personality/domain knowledge.
+- `schemas/`: Validation rules for your context.
+- `knowledge/`: General facts and shared context.
+- `projects/`: Individual execution buckets.
+
+---
+
+## 🌎 Global Installation (Native local)
+
+If you want to use the `workspace` command from any directory on your computer without prefixing it with `npm start`, you can install it "natively" using the provided link script.
+
+### 1. Link the tools
+
+From the ContextOS repository root, run:
+
+```bash
+npm run link:all
+```
+
+This will build both packages and creates global symlinks (`workspace` for the CLI and `context-os-mcp` for the server) in your system's NPM bin directory.
+
+### 2. Verify installation
+
+Open a **new terminal tab** and verify the installation:
+
+```bash
+workspace --version
+```
+
+---
+
+## 🏗️ Building From Source
+
+If you are a contributor and want to build the tools locally:
+
+### 1. Install dependencies
+```bash
+npm install
+```
+
+### 2. Build artifacts
+```bash
+npm run build:all
+```
+
+---
+
+## ⚡ NPX Usage (Ephemeral)
+
+You can also run ContextOS tools without permanent installation using `npx`. This is useful for CI/CD environments or quick one-off tasks.
+
+### Running the CLI
+```bash
+npx @context-os/cli init my-project
+```
+
+### Running the MCP Server
+```bash
+npx @context-os/mcp
+```
+
+---
+
 ## 🛠️ Daily Development Lifecycle
 
 ContextOS is designed to capture the "Delta" of your thinking. Follow these three steps every day to maintain a perfect project memory.
@@ -65,6 +144,8 @@ When an agent is attached via MCP, it doesn't just read files; it acts as a **Co
 If you aren't using a direct MCP-aware IDE like Cursor, you can still attach an agent by pasting this into its system prompt:
 
 > "You have access to a ContextOS workspace. Before making major changes, check `context.md` for dependencies. After completing a task, use `workspace_daily_update` to record your actions."
+
+---
 
 ---
 
