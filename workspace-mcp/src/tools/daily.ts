@@ -27,7 +27,8 @@ export function registerDailyTool(server: McpServer) {
         await gitCommit(dailyLogPath, `feat(mcp): daily log entry for ${date}`);
 
         return {
-          content: [{ type: "text" as const, text: `Updated today's daily log: ${date}.md` }]
+          content: [{ type: "text" as const, text: `Updated today's daily log: ${date}.md` }],
+          isError: false as const
         };
       } catch (error: any) {
         return handleToolError(error);

@@ -8,6 +8,7 @@ import { gitCommit } from "../utils.js";
 export function todayCommand(program: Command) {
   program
     .command("today")
+    .alias("daily")
     .description("Open or create today's daily log")
     .action(async () => {
       const spinner = ora("Setting up today's log...").start();
