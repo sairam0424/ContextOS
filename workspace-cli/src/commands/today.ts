@@ -23,7 +23,7 @@ export function todayCommand(program: Command) {
           const templatesDir = path.join(workspaceRoot, "config", "templates");
           const logTemplatePath = path.join(templatesDir, "daily-log.md");
           
-          let templateContent = `# Daily Log — ${date}\n\n## 🎯 Focus\n- \n\n## ✅ Completed\n- \n\n## 📝 Notes\n- \n`;
+          let templateContent = `# Daily Log — ${date}\n\n#hot\n\n## 🎯 Focus\n- \n\n## ✅ Completed\n- \n\n## 📝 Notes\n- \n`;
           
           if (await fs.pathExists(logTemplatePath)) {
             templateContent = await fs.readFile(logTemplatePath, "utf-8");

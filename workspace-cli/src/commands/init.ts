@@ -29,11 +29,11 @@ export function initCommand(program: Command) {
 
         // Copy templates if they exist, otherwise create blanks
         const templateMap = {
-          "CONTEXT.md": "# Project Context",
-          "memory.md": "# Project Memory",
-          "phases.md": "# Project Phases",
-          "SOUL.md": "# Project Soul",
-          "HEARTBEAT.md": "# Project Heartbeat"
+          "CONTEXT.md": "# Project Context\n\n#hot",
+          "memory.md": "# Project Memory\n\n#hot",
+          "phases.md": "# Project Phases\n\n#hot",
+          "SOUL.md": "# Project Soul\n\n#hot",
+          "HEARTBEAT.md": "# Project Heartbeat\n\n#hot"
         };
 
         for (const [file, content] of Object.entries(templateMap)) {

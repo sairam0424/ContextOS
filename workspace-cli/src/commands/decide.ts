@@ -32,6 +32,8 @@ export function decideCommand(program: Command) {
         const adrContent = `
 ## [${adrId}] ${title}
 
+#hot
+
 - **Date**: ${date}
 - **Status**: Accepted
 - **Context**: ${context}
