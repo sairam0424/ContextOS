@@ -81,6 +81,45 @@ sequenceDiagram
 
 ---
 
+## 📂 Data Formats & Intelligence Structure
+
+ContextOS uses a "Hydrid Schema" approach, mixing human-readable Markdown with machine-verifiable Metadata.
+
+### 1. Frontmatter Intelligence (YAML)
+Most context files use YAML frontmatter to store high-density metadata that agents can quickly parse without reading the entire file.
+```yaml
+---
+last_synced: 2026-04-04
+status: active
+priority: high
+tags: [security, core, mcp]
+---
+```
+
+### 2. Structured Decision Records (ADRs)
+Decisions are encapsulated in a specialized format that ensures traceability:
+- **ID**: Deterministic or auto-incrementing.
+- **Context**: Why are we doing this?
+- **Decision**: What did we decide?
+- **Rationale**: Why is this better?
+- **Consequences**: What new technical debt or benefits were created?
+
+---
+
+## 🗺️ Capability Topology
+
+The "Brain" of ContextOS is divided into specific functional domains.
+
+| Domain | Responsibility | CLI Command | MCP Tool |
+| :--- | :--- | :--- | :--- |
+| **Lifecycle** | Archive/Prune old logs | `archive`, `prune` | `(Automated)` |
+| **Validation** | Schema compliance | `validate` | `(Pre-write Hook)` |
+| **Search** | Semantic & Grep search | `search` | `workspace_search` |
+| **Identity** | Soul & Mission | `(Manual)` | `workspace_context` |
+| **Memory** | Hot/Warm transitions | `sync` | `workspace_memory_update` |
+
+---
+
 ## 📐 Structural Integrity (Schema Enforcement)
 
 Every piece of context in ContextOS is validated against strict JSON Schemas.
