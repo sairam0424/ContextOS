@@ -1,59 +1,42 @@
 # agent-routing.md
 
 ## Purpose
+
 Defines how agents load and interact with workspace context.
 
 ## Boot Sequence
 
 ### Step 1 — Identity
+
 Load:
+
 - root/soul.md
 - root/personality.md
 
+## Log Syncing
+
+- Sync personal logs to `orgs/personal/log/`
+- Sync team logs to `orgs/team/log/`
+- Compress logs older than 30 days into `archive/log/`
+
 ### Step 2 — Org
+
 Load:
+
 - orgs/personal/standards.md
 - orgs/personal/tools.md
 
 ### Step 3 — Project
+
 Load:
+
 - CONTEXT.md
 - memory.md
-- phases.md
-
-### Step 4 — Tasks
-Load:
-- tasks/active.md
-
----
-
-## Agent Types
-
-### Builder Agent
-- Writes code
-- Updates memory.md
-- Logs decisions
-
-### Reviewer Agent
-- Reviews code
-- Validates decisions
-
-### Research Agent
-- Gathers context
-- Updates knowledge/
-
----
+- soul.md
+- decisions.md
 
 ## Routing Rules
 
-- Never load unrelated projects
-- Always prefer local context over global
-- Only load necessary files
-
----
-
-## Write-Back Targets
-
-- memory.md → every session
-- decisions.md → on decision
-- changelog.md → on change
+- Prefer `orgs/` patterns over `root/` defaults.
+- Always append session logs to the current project memory.
+- Validate all path requests against the allowed-bucket list.

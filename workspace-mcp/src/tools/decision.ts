@@ -15,7 +15,7 @@ export function registerDecisionTool(server: McpServer) {
     },
     async ({ project, title, context, decision, rationale }) => {
       try {
-        const { fullPath: projectDir } = validatePath(project, "project");
+        const { fullPath: projectDir } = validatePath(`projects/${project}`);
         const decisionsPath = `${projectDir}/decisions.md`;
         const date = new Date().toISOString().split("T")[0];
         const adrId = `ADR-${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;

@@ -14,6 +14,7 @@ import { pruneCommand } from "./commands/prune.js";
 import { healthCommand } from "./commands/health.js";
 import { extractCommand } from "./commands/extract.js";
 import { tagCommand } from "./commands/tag.js";
+import { validateCommand } from "./commands/validate.js";
 
 const program = new Command();
 
@@ -36,6 +37,7 @@ pruneCommand(program);
 healthCommand(program);
 extractCommand(program);
 tagCommand(program);
+validateCommand(program);
 
 program.parse(process.argv);
 

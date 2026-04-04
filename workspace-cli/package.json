@@ -1,10 +1,21 @@
 {
-  "name": "workspace-cli",
-  "version": "0.1.0",
-  "description": "ContextOS Developer Interface Layer",
+  "name": "@context-os/cli",
+  "version": "1.0.0",
+  "description": "Enterprise-grade context management and developer intelligence CLI",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/index.js",
   "bin": {
     "workspace": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
     "build": "tsc",
@@ -12,14 +23,17 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "commander": "^12.1.0",
+    "ajv": "^8.18.0",
+    "ajv-formats": "^3.0.1",
     "chalk": "^5.3.0",
-    "ora": "^8.0.1",
-    "fs-extra": "^11.2.0"
+    "commander": "^12.1.0",
+    "front-matter": "^4.0.2",
+    "fs-extra": "^11.2.0",
+    "ora": "^8.0.1"
   },
   "devDependencies": {
-    "@types/node": "^22.13.9",
     "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.13.9",
     "typescript": "^5.8.2"
   }
 }

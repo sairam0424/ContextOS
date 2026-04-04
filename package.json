@@ -10,6 +10,13 @@
     "build:mcp": "cd workspace-mcp && npm run build",
     "build:cli": "cd workspace-cli && npm run build",
     "build:all": "npm run build:mcp && npm run build:cli",
-    "test:cli": "cd workspace-cli && npm start -- --help"
+    "validate:all": "cd workspace-cli && npm start -- validate",
+    "test:cli": "cd workspace-cli && npm start -- --help",
+    "test:mcp": "cd workspace-mcp && npm test",
+    "test:all": "npm run test:cli && npm run test:mcp",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
   }
 }

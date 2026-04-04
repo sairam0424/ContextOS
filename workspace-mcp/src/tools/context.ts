@@ -12,7 +12,7 @@ export function registerContextTool(server: McpServer) {
     },
     async ({ project }) => {
       try {
-        const { fullPath: projectDir } = validatePath(project, "project");
+        const { fullPath: projectDir } = validatePath(`projects/${project}`);
         const filesToLoad = ["CONTEXT.md", "memory.md", "decisions.md", "tasks/active.md"];
         let content = `# Context for Project: ${project}\n\n`;
 

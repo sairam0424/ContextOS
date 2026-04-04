@@ -12,8 +12,7 @@ export function registerMemoryTool(server: McpServer) {
     },
     async ({ project, content }) => {
       try {
-        const { fullPath: projectDir } = validatePath(project, "project");
-        const memoryPath = `${projectDir}/memory.md`;
+        const { fullPath: memoryPath } = validatePath(`projects/${project}/memory.md`);
         const date = new Date().toISOString().split("T")[0];
         
         const fullMemoryContent = `# Project Memory: ${project}\n\nLast Updated: ${date}\n\n${content}\n`;

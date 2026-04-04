@@ -11,11 +11,12 @@ export function registerSearchTool(server: McpServer) {
     "workspace_search",
     {
       query: z.string().describe("Search query string"),
-      scope: z.enum(["root", "org", "project"]).optional().describe("Search scope")
+      scope: z.string().optional().describe("Search scope (e.g., projects, knowledge, or specific project name)")
     },
     async ({ query, scope }) => {
       try {
-        const { fullPath: baseDir } = validatePath("", scope || "root");
+        const target = scope === "root" ? "." : scope || "projects";
+        const { fullPath: baseDir } = validatePath(target);
 
         // Use grep -rnI via execFile (no shell interpolation)
         const { stdout } = await execFileAsync("grep", ["-rnIE", query, "."], { cwd: baseDir });
