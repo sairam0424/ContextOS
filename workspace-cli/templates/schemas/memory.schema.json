@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ContextOS Memory Schema",
+  "description": "Schema for project memory.md files.",
+  "type": "object",
+  "required": ["Overview"],
+  "properties": {
+    "Overview": { "type": "string" },
+    "Learnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "Patterns": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "Metadata": {
+      "type": "object",
+      "properties": {
+        "Tags": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

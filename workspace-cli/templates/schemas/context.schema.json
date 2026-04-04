@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ContextOS Context Schema",
+  "description": "Schema for project CONTEXT.md files.",
+  "type": "object",
+  "required": ["Overview", "Goals"],
+  "properties": {
+    "Overview": { "type": "string" },
+    "Goals": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "Stack": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "Metadata": {
+      "type": "object",
+      "properties": {
+        "Tags": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}
