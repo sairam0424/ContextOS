@@ -1,4 +1,5 @@
 import path from "path";
+import fs from "fs";
 import { spawn } from "child_process";
 
 // Discover workspace root by looking for soul.md in parent directories
@@ -6,7 +7,7 @@ function findWorkspaceRoot() {
   let current = process.cwd();
   const root = "/";
   while (current !== root) {
-    if (require('fs').existsSync(path.join(current, "root", "soul.md"))) {
+    if (fs.existsSync(path.join(current, "root", "soul.md"))) {
       return current;
     }
     current = path.dirname(current);
