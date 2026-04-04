@@ -1,74 +1,79 @@
 import path from "path";
-import { execFile } from "child_process";
-import { promisify } from "util";
+import fs from "fs";
+import { spawn } from "child_process";
 
-const execFileAsync = promisify(execFile);
-const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
-
-/**
- * Validates and resolves a path to ensure it's within a given scope.
- * Handles double-resolution for symlink protection.
- */
-export function validatePath(filePath: string, scope: "root" | "org" | "project" = "root") {
-  let baseDir = WORKSPACE_ROOT;
-  if (scope === "org") baseDir = path.join(WORKSPACE_ROOT, "orgs");
-  if (scope === "project") baseDir = path.join(WORKSPACE_ROOT, "projects");
-
-  const absoluteBase = path.resolve(baseDir);
-  const resolvedPath = path.resolve(absoluteBase, filePath);
-
-  if (!resolvedPath.startsWith(absoluteBase)) {
-    throw new Error(`Access Denied: Path "${filePath}" traverses outside of scope "${scope}".`);
-  }
-
-  return { fullPath: resolvedPath, relativePath: path.relative(WORKSPACE_ROOT, resolvedPath) };
-}
-
-/**
- * Simple asynchronous task queue to serialize git operations.
- * Prevents index.lock conflicts.
- */
-class TaskQueue {
-  private queue: Promise<any> = Promise.resolve();
-
-  async add<T>(task: () => Promise<T>): Promise<T> {
-    const result = this.queue.then(task);
-    this.queue = result.catch(() => {}); // Continue queue even if task fails
-    return result;
-  }
-}
-
-export const gitQueue = new TaskQueue();
-
-/**
- * Executes a git operation securely using execFile (no shell interpolation).
- */
-export async function gitCommit(filePath: string, message: string) {
-  return gitQueue.add(async () => {
-    try {
-      // workspace_write already handles the write, we just add and commit
-      await execFileAsync("git", ["add", filePath], { cwd: WORKSPACE_ROOT });
-      await execFileAsync("git", ["commit", "-m", message], { cwd: WORKSPACE_ROOT });
-      return true;
-    } catch (error: any) {
-      // Ignore "nothing to commit" errors
-      if (error.stdout?.includes("nothing to commit") || error.stderr?.includes("nothing to commit")) {
-        return true;
-      }
-      console.warn(`Git operation failed for ${filePath}:`, error.message);
-      return false;
+// Discover workspace root by looking for soul.md in parent directories
+function findWorkspaceRoot() {
+  let current = process.cwd();
+  const root = "/";
+  while (current !== root) {
+    if (fs.existsSync(path.join(current, "root", "soul.md"))) {
+      return current;
     }
+    current = path.dirname(current);
+  }
+  return process.cwd(); // Fallback to CWD
+}
+
+const workspaceRoot = findWorkspaceRoot();
+
+const ALLOWED_ROOTS = [
+  path.join(workspaceRoot, "projects"),
+  path.join(workspaceRoot, "knowledge"),
+  path.join(workspaceRoot, "schemas"),
+  path.join(workspaceRoot, "archive"),
+  path.join(workspaceRoot, "log"),
+  path.join(workspaceRoot, "orgs"),
+  path.join(workspaceRoot, "root")
+];
+
+export function validatePath(requestedPath: string) {
+  const fullPath = path.resolve(workspaceRoot, requestedPath);
+  const relativePath = path.relative(workspaceRoot, fullPath);
+
+  // Security check: must be within the workspace root
+  if (relativePath.startsWith("..") || path.isAbsolute(requestedPath)) {
+      if (!fullPath.startsWith(workspaceRoot)) {
+        throw new Error(`Security violation: Path ${requestedPath} is outside the allowed ContextOS workspace roots.`);
+      }
+  }
+
+  // Enterprise check: must be within an allowed bucket
+  const isAllowed = ALLOWED_ROOTS.some(root => fullPath.startsWith(root));
+  
+  if (!isAllowed) {
+    throw new Error(`Security violation: Path ${requestedPath} is outside the allowed bucket (projects, orgs, knowledge, schemas, etc).`);
+  }
+
+  return { fullPath, relativePath };
+}
+
+export function isReadOnly(filePath: string): boolean {
+  const absolutePath = path.resolve(workspaceRoot, filePath);
+  
+  // Knowledge, Schemas, and Root are read-only for agents via MCP
+  const readOnlyRoots = [
+    path.join(workspaceRoot, "knowledge"),
+    path.join(workspaceRoot, "schemas"),
+    path.join(workspaceRoot, "root")
+  ];
+  
+  return readOnlyRoots.some(root => absolutePath.startsWith(root));
+}
+
+export async function gitCommit(filePath: string, message: string) {
+  return new Promise<void>((resolve) => {
+    const add = spawn("git", ["add", filePath], { cwd: workspaceRoot });
+    add.on("close", () => {
+      const commit = spawn("git", ["commit", "-m", message], { cwd: workspaceRoot });
+      commit.on("close", () => resolve());
+    });
   });
 }
 
-/**
- * Standardizes MCP tool error responses.
- */
 export function handleToolError(error: any) {
   return {
     content: [{ type: "text" as const, text: `Error: ${error.message}` }],
     isError: true
   };
 }
-
-export { WORKSPACE_ROOT };

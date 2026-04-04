@@ -89,3 +89,25 @@ Treat this file as the primary handoff mechanism. If a task is interrupted, the 
 ### Patterns to Reuse
 - Copy CLAUDE.md to AGENTS.md to keep agent rules in sync.
 - Ensure tasks/active.md and tasks/backlog.md are populated to prevent empty-task ambiguity.
+
+---
+
+## Session Notes — 2026-04-04 (Day 10 Audit)
+
+### New Insights
+
+- **Validation Robustness**: CLI validation must handle both Frontmatter and Section-based metadata to support different developer styles while enforcing the same schema.
+- **Root Discovery**: `process.cwd()` is unreliable in multi-package repositories; implemented parent-walk root discovery for both CLI and MCP to find `root/soul.md`.
+- **Security Scoping**: Added `orgs/` and `root/` buckets to `ALLOWED_ROOTS` to enable safe cross-layer context management.
+
+### Decisions
+
+- Switched from `exec` to `spawn` for git operations to eliminate shell injection vulnerabilities and improve signal handling.
+- Enforced strict schema validation on the `workspace-starter` template to prevent regression in onboarding materials.
+
+### Mistakes & Mitigations
+
+- **Mistake**: Accurately identified that `SOUL.md` and `CONTEXT.md` were desynced from their JSON schemas (missing required sections like Identity/Overview).
+- **Mitigation**: Aligned all project and starter files with updated schemas using strict Frontmatter or Section definitions.
+- **Mistake**: Discovered that Section parsing was failing when content started with Frontmatter but lacked `## ` headers.
+- **Mitigation**: Upgraded `extractMetadata` in the CLI to merge results from both Frontmatter and Section parsers intelligently.

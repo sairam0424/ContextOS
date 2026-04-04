@@ -8,11 +8,12 @@ export function registerDailyTool(server: McpServer) {
   server.tool(
     "workspace_daily_update",
     {
+      project: z.string().describe("Project name"),
       content: z.string().describe("Content to append to today's daily log")
     },
-    async ({ content }) => {
+    async ({ project, content }) => {
       try {
-        const { fullPath: dailyDir } = validatePath("daily", "root");
+        const { fullPath: dailyDir } = validatePath(`projects/${project}/daily`);
         const date = new Date().toISOString().split("T")[0];
         const dailyLogPath = path.join(dailyDir, `${date}.md`);
         

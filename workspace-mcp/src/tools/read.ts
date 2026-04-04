@@ -12,7 +12,7 @@ export function registerReadTool(server: McpServer) {
     },
     async ({ path: filePath, scope }) => {
       try {
-        const { fullPath } = validatePath(filePath, scope);
+        const { fullPath } = validatePath(`${scope}/${filePath}`);
         const data = await fs.readFile(fullPath, "utf-8");
         return {
           content: [{ type: "text" as const, text: data }]

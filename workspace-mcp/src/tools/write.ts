@@ -14,10 +14,10 @@ export function registerWriteTool(server: McpServer) {
     async ({ path: filePath, content, mode }) => {
       try {
         const { fullPath, relativePath } = validatePath(filePath);
+        const { isReadOnly } = await import("../utils.js");
 
-        // Prevent root file overwrites unless specified
-        if (filePath.startsWith("root/") && mode === "replace") {
-          throw new Error(`Root files are read-only for replacement. Use append or update project-level files instead.`);
+        if (isReadOnly(fullPath)) {
+          throw new Error(`Path ${filePath} is in a read-only bucket (knowledge/schemas). Use specific extraction tools to update knowledge.`);
         }
 
         if (mode === "append") {
