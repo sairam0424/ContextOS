@@ -22,13 +22,13 @@ export function registerSearchTool(server: McpServer) {
 
         const results = stdout.split("\n").slice(0, 50).join("\n");
         return {
-          content: [{ type: "text", text: results || "No results found." }]
+          content: [{ type: "text" as const, text: results || "No results found." }]
         };
       } catch (error: any) {
         // If grep fails (no results), return a friendly message
         if (error.code === 1) {
             return {
-                content: [{ type: "text", text: "No results found." }]
+                content: [{ type: "text" as const, text: "No results found." }]
             };
         }
         return handleToolError(error);

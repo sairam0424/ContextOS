@@ -1,0 +1,15 @@
+{
+  "name": "context-os-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root management for ContextOS MCP and CLI",
+  "scripts": {
+    "install:mcp": "cd workspace-mcp && npm install",
+    "install:cli": "cd workspace-cli && npm install",
+    "install:all": "npm run install:mcp && npm run install:cli",
+    "build:mcp": "cd workspace-mcp && npm run build",
+    "build:cli": "cd workspace-cli && npm run build",
+    "build:all": "npm run build:mcp && npm run build:cli",
+    "test:cli": "cd workspace-cli && npm start -- --help"
+  }
+}

@@ -30,7 +30,7 @@ export function registerWriteTool(server: McpServer) {
         await gitCommit(fullPath, `chore(mcp): update ${relativePath}`);
 
         return {
-          content: [{ type: "text", text: `Successfully wrote to ${filePath} (${mode})` }]
+          content: [{ type: "text" as const, text: `Successfully ${mode}d to ${filePath}` }]
         };
       } catch (error: any) {
         return handleToolError(error);

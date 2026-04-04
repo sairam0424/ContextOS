@@ -66,7 +66,7 @@ export async function gitCommit(filePath: string, message: string) {
  */
 export function handleToolError(error: any) {
   return {
-    content: [{ type: "text", text: `Error: ${error.message}` }],
+    content: [{ type: "text" as const, text: `Error: ${error.message}` }],
     isError: true
   };
 }

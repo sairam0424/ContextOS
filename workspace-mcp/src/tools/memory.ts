@@ -22,7 +22,7 @@ export function registerMemoryTool(server: McpServer) {
         await gitCommit(memoryPath, `feat(mcp): update context memory for ${project}`);
 
         return {
-          content: [{ type: "text", text: `Updated memory for ${project}` }]
+          content: [{ type: "text" as const, text: `Updated memory for ${project}` }]
         };
       } catch (error: any) {
         return handleToolError(error);

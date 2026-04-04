@@ -34,7 +34,7 @@ export function registerDecisionTool(server: McpServer) {
         await gitCommit(decisionsPath, `feat(mcp): log decision ${adrId}: ${title}`);
 
         return {
-          content: [{ type: "text", text: `Logged decision ${adrId} in ${project}/decisions.md` }]
+          content: [{ type: "text" as const, text: `Logged decision ${adrId} in ${project}/decisions.md` }]
         };
       } catch (error: any) {
         return handleToolError(error);
