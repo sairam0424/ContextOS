@@ -1,0 +1,20 @@
+{
+  "name": "workspace-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "workspace-mcp": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "start": "node build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "typescript": "^5.8.2"
+  }
+}

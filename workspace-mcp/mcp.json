@@ -1,0 +1,34 @@
+{
+  "name": "workspace-mcp",
+  "description": "ContextOS MCP Server - programmable interface for workspace context.",
+  "tools": [
+    {
+      "name": "workspace_read",
+      "description": "Read any file within the workspace with scope-based protection."
+    },
+    {
+      "name": "workspace_write",
+      "description": "Write or append content to files with automatic git committing."
+    },
+    {
+      "name": "workspace_search",
+      "description": "Search across workspace root, orgs, or project directories."
+    },
+    {
+      "name": "workspace_context",
+      "description": "Load all relevant project context (management files) in one batch."
+    },
+    {
+      "name": "workspace_log_decision",
+      "description": "Structurally log architectural decisions in ADR format."
+    },
+    {
+      "name": "workspace_memory_update",
+      "description": "Maintain and update project-specific context memory."
+    },
+    {
+      "name": "workspace_daily_update",
+      "description": "Record daily progress and updates to the central log."
+    }
+  ]
+}
