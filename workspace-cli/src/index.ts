@@ -9,6 +9,11 @@ import { syncCommand } from "./commands/sync.js";
 import { summaryCommand } from "./commands/summary.js";
 import { contextCommand } from "./commands/context.js";
 import { searchCommand } from "./commands/search.js";
+import { archiveCommand } from "./commands/archive.js";
+import { pruneCommand } from "./commands/prune.js";
+import { healthCommand } from "./commands/health.js";
+import { extractCommand } from "./commands/extract.js";
+import { tagCommand } from "./commands/tag.js";
 
 const program = new Command();
 
@@ -26,6 +31,11 @@ syncCommand(program);
 summaryCommand(program);
 contextCommand(program);
 searchCommand(program);
+archiveCommand(program);
+pruneCommand(program);
+healthCommand(program);
+extractCommand(program);
+tagCommand(program);
 
 program.parse(process.argv);
 
