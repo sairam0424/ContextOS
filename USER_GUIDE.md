@@ -29,25 +29,20 @@ This will automatically scaffold:
 
 ## 🌎 Global Installation (Native local)
 
-If you want to use the `workspace` command from any directory on your computer without prefixing it with `npm start`, you can install it "natively" using the provided link script.
-
-### 1. Link the tools
-
-From the ContextOS repository root, run:
-
+### 1. Global Installation
+The easiest way to get started is by installing the CLI globally:
 ```bash
-npm run link:all
+npm install -g @context-os/cli
 ```
 
-This will build both packages and creates global symlinks (`workspace` for the CLI and `context-os-mcp` for the server) in your system's NPM bin directory.
+Once installed, you can use the `workspace` command anywhere in your terminal.
 
-### 2. Verify installation
-
-Open a **new terminal tab** and verify the installation:
-
+### 2. Standard Initialization
+Navigate to your project root and run:
 ```bash
-workspace --version
+workspace init .
 ```
+This will create the necessary `.claude/`, `root/`, and `WORKSPACE.md` files required for ContextOS to function.
 
 ---
 
@@ -160,26 +155,21 @@ I (Antigravity) am natively aware of ContextOS. To use it with me:
 1. Ensure the workspace is initialized.
 2. Ask me: "What is the context for my-project?" or "Update the project memory with my latest work."
 
-### 🖱️ Cursor
+### 1. Cursor Setup
+1.  Open **Cursor Settings** > **General** > **MCP**.
+2.  Click **+ Add New MCP Server**.
+3.  **Name**: `ContextOS`
+4.  **Type**: `command`
+5.  **Command**: `npx -y @context-os/mcp@latest`
 
-1. Go to **Settings** → **Features** → **MCP**.
-2. Click **+ Add New MCP Server**.
-3. **Name**: `ContextOS`
-4. **Type**: `command`
-5. **Command**: `node /absolute/path/to/ContextOS/workspace-mcp/dist/index.js`
-
-*Cursor will now automatically include project context in your 'Composer' sessions.*
-
-### 🤖 Claude Code
-
-Add ContextOS to your `claude_desktop_config.json`:
-
+### 2. Claude Desktop Setup
+Add the following to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
     "context-os": {
-      "command": "node",
-      "args": ["/absolute/path/to/ContextOS/workspace-mcp/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "@context-os/mcp@latest"]
     }
   }
 }

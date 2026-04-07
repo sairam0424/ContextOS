@@ -39,7 +39,7 @@ export function validateCommand(program: Command) {
         };
 
         const workspaceRoot = findWorkspaceRoot();
-        const schemasDir = path.join(workspaceRoot, "schemas");
+        const schemasDir = path.join(workspaceRoot, "packages", "core", "schemas");
         const projectsDir = path.join(workspaceRoot, "projects");
         const starterDir = path.join(workspaceRoot, "workspace-starter");
 

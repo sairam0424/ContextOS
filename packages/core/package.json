@@ -1,0 +1,35 @@
+{
+  "name": "@context-os/core",
+  "version": "1.0.1",
+  "description": "Shared intelligence layer, schemas, and security buckets for ContextOS",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && mocha dist/tests/**/*.test.js"
+  },
+  "dependencies": {
+    "fs-extra": "^11.2.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.2.3",
+    "@types/fs-extra": "^11.0.4",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.13.9",
+    "chai": "^5.2.0",
+    "mocha": "^11.1.0",
+    "typescript": "^5.8.2"
+  }
+}

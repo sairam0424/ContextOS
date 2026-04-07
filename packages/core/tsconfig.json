@@ -3,14 +3,13 @@
     "target": "ESNext",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "outDir": "./dist",
-    "rootDir": "src",
+    "declaration": true,
+    "outDir": "dist",
     "strict": true,
-    "skipLibCheck": true,
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "types": ["mocha", "node"]
+    "typeRoots": ["../../workspace-mcp/node_modules/@types"]
   },
   "include": ["src/**/*"]
 }

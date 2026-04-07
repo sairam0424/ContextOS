@@ -1,30 +1,28 @@
-import fs from "fs";
-import { expect } from "chai";
+import assert from "node:assert";
 import { validatePath, findWorkspaceRoot } from "../utils.js";
-import path from "path";
+import path from "node:path";
+import fs from "node:fs";
 
 describe("Security Isolation Tests", () => {
   const workspaceRoot = findWorkspaceRoot();
 
   it("should allow paths within projects directory", () => {
     const validPath = path.join(workspaceRoot, "projects", "ContextOS", "memory.md");
-    expect(() => validatePath(validPath)).to.not.throw();
+    assert.doesNotThrow(() => validatePath(validPath));
   });
 
   it("should block directory traversal attacks (..)", () => {
     const maliciousPath = path.join(workspaceRoot, "projects", "ContextOS", "..", "..", "package.json");
-    expect(() => validatePath(maliciousPath)).to.throw(/Security violation/);
+    assert.throws(() => validatePath(maliciousPath), /Security violation/);
   });
 
   it("should block access to root config files when in project context", () => {
     const rootConfig = path.join(workspaceRoot, "package.json");
-    // Since validatePath doesn't know the intended 'base', we might need to enhance it
-    // for enterprise hardening to accept a 'baseDir' parameter.
-    expect(() => validatePath(rootConfig)).to.throw(/Security violation/);
+    assert.throws(() => validatePath(rootConfig), /Security violation/);
   });
 
   it("should allow access to specific allowed root files (knowledge, schemas)", () => {
     const knowledgePath = path.join(workspaceRoot, "knowledge", "domains", "ai-agents.md");
-    expect(() => validatePath(knowledgePath)).to.not.throw();
+    assert.doesNotThrow(() => validatePath(knowledgePath));
   });
 });
