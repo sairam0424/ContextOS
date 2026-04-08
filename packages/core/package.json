@@ -21,11 +21,13 @@
     "test": "npm run build && mocha dist/tests/**/*.test.js"
   },
   "dependencies": {
-    "fs-extra": "^11.2.0"
+    "fs-extra": "^11.2.0",
+    "js-yaml": "^3.14.2"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",
     "@types/fs-extra": "^11.0.4",
+    "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.13.9",
     "chai": "^5.2.0",

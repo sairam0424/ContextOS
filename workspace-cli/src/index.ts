@@ -15,6 +15,7 @@ import { healthCommand } from "./commands/health.js";
 import { extractCommand } from "./commands/extract.js";
 import { tagCommand } from "./commands/tag.js";
 import { validateCommand } from "./commands/validate.js";
+import { indexCommand } from "./commands/index-cmd.js";
 
 const program = new Command();
 
@@ -38,6 +39,7 @@ healthCommand(program);
 extractCommand(program);
 tagCommand(program);
 validateCommand(program);
+indexCommand(program);
 
 program.parse(process.argv);
 
