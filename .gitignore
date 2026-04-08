@@ -10,6 +10,7 @@ coverage/
 .npmrc
 npm_cache/
 .context-index.json
+.turbo/
 
 prompts/
 
