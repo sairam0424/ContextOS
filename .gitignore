@@ -7,6 +7,8 @@ build/
 coverage/
 .vscode/
 .idea/
+.npmrc
+npm_cache/
 
 prompts/
 

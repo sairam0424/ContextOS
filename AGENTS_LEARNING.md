@@ -111,3 +111,22 @@ Treat this file as the primary handoff mechanism. If a task is interrupted, the 
 - **Mitigation**: Aligned all project and starter files with updated schemas using strict Frontmatter or Section definitions.
 - **Mistake**: Discovered that Section parsing was failing when content started with Frontmatter but lacked `## ` headers.
 - **Mitigation**: Upgraded `extractMetadata` in the CLI to merge results from both Frontmatter and Section parsers intelligently.
+
+---
+
+## Session Notes — 2026-04-08 (v1.0 Readiness Audit)
+
+### New Insights
+
+- **Audit-Ready Architecture**: The decoupling of CLI and MCP through a shared "Intelligence Layer" makes the system remarkably stable for multi-agent workflows.
+- **Isolation Validation**: Testing the security model with `isolation.test.ts` is a critical baseline for allowing autonomous writes in enterprise environments.
+
+### Decisions
+
+- Formally declared ContextOS as "Ready for v1.0.0" based on the implementation of 14 CLI commands and 7 MCP tools.
+- Identified 5 core USPs (Isolation, Hybrid Schema, Memory Tiers, Schema Enforcement, Git-as-DB) to be used in marketing and documentation.
+
+### Mistakes & Mitigations
+
+- **Mistake**: Identified that while `search` exists in both CLI and MCP, semantic search is currently a placeholder for future vector DB integration.
+- **Mitigation**: Clarified in the audit report that current search is Grep-based, ensuring transparent expectations for the v1.0 release.

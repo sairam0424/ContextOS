@@ -1,23 +1,30 @@
 {
-  "name": "context-os-root",
+  "name": "context-os",
   "version": "1.0.0",
+  "type": "module",
   "private": true,
-  "description": "Root management for ContextOS MCP and CLI",
+  "description": "Enterprise-grade intelligence layer for autonomous AI agents.",
+  "workspaces": [
+    "workspace-cli",
+    "workspace-mcp",
+    "packages/core"
+  ],
   "scripts": {
-    "install:mcp": "cd workspace-mcp && npm install",
-    "install:cli": "cd workspace-cli && npm install",
-    "install:all": "npm run install:mcp && npm run install:cli",
-    "build:mcp": "cd workspace-mcp && npm run build",
-    "build:cli": "cd workspace-cli && npm run build",
-    "build:all": "npm run build:mcp && npm run build:cli",
-    "validate:all": "cd workspace-cli && npm start -- validate",
-    "test:cli": "cd workspace-cli && npm start -- --help",
-    "test:mcp": "cd workspace-mcp && npm test",
-    "test:all": "npm run test:cli && npm run test:mcp",
-    "link:all": "npm run build:all && cd workspace-cli && npm link && cd ../workspace-mcp && npm link",
+    "sync:assets": "node scripts/sync-templates.js",
+    "build:cli": "npm run build -w @context-os/cli",
+    "build:mcp": "npm run build -w @context-os/mcp",
+    "build": "npm run sync:assets && npm run build:cli && npm run build:mcp",
+    "test:cli": "npm test -w @context-os/cli",
+    "test:mcp": "npm test -w @context-os/mcp",
+    "test:all": "npm test",
+    "test": "npm run test:cli && npm run test:mcp",
+    "validate:all": "npm start -w @context-os/cli -- validate",
+    "link:all": "npm run build && npm link -w @context-os/cli && npm link -w @context-os/mcp",
     "prepare": "husky"
   },
   "devDependencies": {
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.13.10"
   }
 }

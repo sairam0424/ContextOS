@@ -21,7 +21,7 @@ const program = new Command();
 program
   .name("workspace")
   .description("ContextOS Developer Interface Layer")
-  .version("0.1.0");
+  .version("1.0.1");
 
 // Register Commands
 initCommand(program);

@@ -17,22 +17,23 @@ ContextOS is a multi-layered infrastructure designed to bridge the gap between r
 
 ## ⚡ Quick Start
 
-### 1. Installation
+### 1. Install the CLI
+To use ContextOS in your terminal anywhere:
 ```bash
-git clone https://github.com/sair0424/ContextOS.git
-npm run install:all
-npm run build:all
+npm install -g @context-os/cli
 ```
 
 ### 2. Initialize a Project
 ```bash
-cd workspace-cli
-npm start -- init my-cool-project
+workspace init my-cool-project
 ```
 
-### 3. Connect your AI Agent
-Configure your MCP client (Cursor, Claude Desktop) to point to the server:
-- **Command**: `node /absolute/path/to/ContextOS/workspace-mcp/dist/index.js`
+### 3. Connect your AI Agent (MCP)
+In Cursor, Claude Desktop, or VS Code settings, add the following command:
+```bash
+npx -y @context-os/mcp@latest
+```
+*Note: Using `npx` ensures you always have the latest intelligence features without manual updates.*
 
 ---
 

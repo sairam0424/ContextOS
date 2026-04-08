@@ -1,6 +1,6 @@
 {
   "name": "@context-os/mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Model Context Protocol server for ContextOS integration",
   "type": "module",
   "publishConfig": {
@@ -24,12 +24,13 @@
     "test": "npm run build && PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin npx mocha dist/tests/**/*.test.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.6.0"
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "@context-os/core": "1.0.1"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^22.13.9",
+    "@types/node": "^22.13.10",
     "chai": "^6.2.2",
     "mocha": "^11.7.5",
     "ts-node": "^10.9.2",
