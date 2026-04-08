@@ -114,6 +114,28 @@ Treat this file as the primary handoff mechanism. If a task is interrupted, the 
 
 ---
 
+## Session Notes — 2026-04-08 (Optimization Loop v1.1 - v1.3)
+
+### New Insights
+
+- **Monorepo Task Runners**: Transitioning from manual shell scripts to **Turborepo** results in massive performance gains (Cold: 12s → 3s, Warm: 11ms). Parallelization across Core, CLI, and MCP ensures that build bottlenecks are eliminated.
+- **Headless Domain Logic**: Moving business logic (Search, Sync, Validation) into a **Service Layer** in `@context-os/core` is the most significant architectural win. It ensures that the MCP server and CLI provide identical outcomes while allowing for a "Thin CLI" that focuses only on UI/UX.
+- **Inter-Package Dependency Loop**: In a monorepo, changing the Core package requires a `tsc` build before other packages (CLI/MCP) can see the new exports. Using `turbo run build` is the safest way to ensure the entire system is in sync.
+
+### Decisions
+
+- **Functional Singletons**: Implemented Services (Intelligence, Validation, Workspace) as exported instances to provide a clean, ready-to-use API for consumers.
+- **Hybrid Search Parity**: Upgraded the MCP server from raw `grep` to the hybrid `IntelligenceService` (Index + Grep fallback), providing immediate parity with the CLI.
+
+### Mistakes & Mitigations
+
+- **Mistake**: Forgot to export a convenience getter for the workspace root, leading to lint errors across new services.
+- **Mitigation**: Added `getWorkspaceRoot()` to `packages/core/src/context.ts` as the standard way to resolve the system root.
+- **Mistake**: Attempted to pass CLI-unsupported flags (like `--cache`) during manual smoke tests.
+- **Mitigation**: Verified commands against actual CLI help signatures before execution.
+
+---
+
 ## Session Notes — 2026-04-08 (v1.0 Readiness Audit)
 
 ### New Insights

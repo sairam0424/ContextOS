@@ -5,6 +5,9 @@ import { workspaceRoot, ALLOWED_BUCKETS } from './context.js';
 
 export * from './context.js';
 export * from './indexer.js';
+export * from './services/intelligence.js';
+export * from './services/validation.js';
+export * from './services/workspace.js';
 
 /**
  * Validates that a path is within the workspace root and inside an allowed bucket.

@@ -1,39 +1,41 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { validatePath, handleToolError } from "../utils.js";
-
-const execFileAsync = promisify(execFile);
+import { intelligenceService } from "@context-os/core";
+import { handleToolError } from "../utils.js";
 
 export function registerSearchTool(server: McpServer) {
   server.tool(
     "workspace_search",
     {
       query: z.string().describe("Search query string"),
-      scope: z.string().optional().describe("Search scope (e.g., projects, knowledge, or specific project name)")
+      deep: z.boolean().optional().describe("Force deep scan using grep")
     },
-    async ({ query, scope }) => {
+    async ({ query, deep }) => {
       try {
-        const target = scope === "root" ? "." : scope || "projects";
-        const { fullPath: baseDir } = validatePath(target);
+        const results = await intelligenceService.search(query, { deep });
 
-        // Use grep -rnI via execFile (no shell interpolation)
-        const { stdout } = await execFileAsync("grep", ["-rnIE", query, "."], { cwd: baseDir });
+        if (results.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: "No results found." }],
+          };
+        }
 
-        const results = stdout.split("\n").slice(0, 50).join("\n");
+        const formattedResults = results.map(res => {
+          const typeTag = res.type === 'index' ? '[Index]' : '[Deep]';
+          let output = `${typeTag} ${res.path}\n`;
+          if (res.title && res.title !== 'Deep Scan Result') {
+            output += `Title: ${res.title} ${res.tags.length ? `[${res.tags.join(', ')}]` : ''}\n`;
+          }
+          output += `Excerpt: ${res.excerpt}\n`;
+          output += `---`;
+          return output;
+        }).join('\n');
+
         return {
-          content: [{ type: "text" as const, text: results || "No results found." }],
+          content: [{ type: "text" as const, text: formattedResults }],
           isError: false as const
         };
       } catch (error: any) {
-        // If grep fails (no results), return a friendly message
-        if (error.code === 1) {
-            return {
-                content: [{ type: "text" as const, text: "No results found." }],
-                isError: false as const
-            };
-        }
         return handleToolError(error);
       }
     }
