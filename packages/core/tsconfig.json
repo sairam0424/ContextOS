@@ -9,7 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "typeRoots": ["../../workspace-mcp/node_modules/@types"]
+    "types": ["mocha", "node"]
   },
   "include": ["src/**/*"]
 }

@@ -9,6 +9,7 @@ coverage/
 .idea/
 .npmrc
 npm_cache/
+.context-index.json
 
 prompts/
 

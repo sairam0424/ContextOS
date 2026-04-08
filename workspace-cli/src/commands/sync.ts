@@ -3,6 +3,7 @@ import chalk from "chalk";
 import ora from "ora";
 import fs from "fs-extra";
 import path from "path";
+import { globalIndexer } from "@context-os/core";
 
 export function syncCommand(program: Command) {
   program
@@ -34,9 +35,11 @@ export function syncCommand(program: Command) {
           } else {
             spinner.fail(chalk.red(`Memory file not found for ${project}`));
           }
-        } else {
-          spinner.succeed(chalk.green("Global workspace sync complete."));
         }
+        
+        // Auto-refresh the intelligence index
+        await globalIndexer.reindex();
+        spinner.succeed(chalk.green("Workspace synced and indexed."));
       } catch (error: any) {
         spinner.fail(chalk.red(`Sync failed: ${error.message}`));
       }
