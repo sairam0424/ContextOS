@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
+  "packageManager": "npm@11.11.0",
   "description": "Enterprise-grade intelligence layer for autonomous AI agents.",
   "workspaces": [
     "workspace-cli",
@@ -11,20 +12,16 @@
   ],
   "scripts": {
     "sync:assets": "node scripts/sync-templates.js",
-    "build:cli": "npm run build -w @context-os/cli",
-    "build:mcp": "npm run build -w @context-os/mcp",
-    "build": "npm run sync:assets && npm run build:cli && npm run build:mcp",
-    "test:cli": "npm test -w @context-os/cli",
-    "test:mcp": "npm test -w @context-os/mcp",
-    "test:all": "npm test",
-    "test": "npm run test:cli && npm run test:mcp",
-    "validate:all": "npm start -w @context-os/cli -- validate",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "validate": "turbo run validate --",
     "link:all": "npm run build && npm link -w @context-os/cli && npm link -w @context-os/mcp",
     "prepare": "husky"
   },
   "devDependencies": {
-    "husky": "^9.1.7",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^22.13.10"
+    "@types/node": "^22.13.10",
+    "husky": "^9.1.7",
+    "turbo": "^2.9.5"
   }
 }
