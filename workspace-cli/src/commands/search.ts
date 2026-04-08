@@ -1,11 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import { globalIndexer } from "@context-os/core";
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
+import { intelligenceService } from "@context-os/core";
 
 export function searchCommand(program: Command) {
   program
@@ -16,40 +12,26 @@ export function searchCommand(program: Command) {
     .action(async (query, options) => {
       const spinner = ora(`Searching for ${chalk.cyan(query)}...`).start();
       try {
-        // 1. Try Metadata Index First
-        if (!options.deep) {
-          const results = await globalIndexer.search(query);
-          if (results.length > 0) {
-            spinner.succeed(chalk.green(`Found ${results.length} matching files in index:`));
-            console.log("");
-            results.forEach(res => {
-              console.log(`${chalk.blue(res.path)}`);
-              console.log(`${chalk.gray(res.title)} ${res.tags.length ? chalk.yellow(`[${res.tags.join(', ')}]`) : ''}`);
-              console.log(`${chalk.white(res.excerpt)}...`);
-              console.log(chalk.gray('---'));
-            });
-            return;
-          }
-        }
+        const results = await intelligenceService.search(query, { deep: options.deep });
 
-        // 2. Fallback to Deep Scan (Grep)
-        spinner.text = `Performing deep scan for ${chalk.cyan(query)}...`;
-        const workspaceRoot = process.cwd();
-        const command = `grep -rnIE "${query}" . | head -n 20`;
-        const { stdout } = await execAsync(command, { cwd: workspaceRoot });
-
-        if (!stdout) {
+        if (results.length === 0) {
           spinner.info(chalk.yellow("No results found."));
           return;
         }
 
-        spinner.succeed(chalk.green("Deep scan results:"));
-        console.log(`\n${stdout}`);
+        spinner.succeed(chalk.green(`Found ${results.length} matches:`));
+        console.log("");
+
+        results.forEach(res => {
+          const typeTag = res.type === 'index' ? chalk.cyan('[Index]') : chalk.magenta('[Deep]');
+          console.log(`${typeTag} ${chalk.blue(res.path)}`);
+          if (res.title && res.title !== 'Deep Scan Result') {
+            console.log(`${chalk.gray(res.title)} ${res.tags.length ? chalk.yellow(`[${res.tags.join(', ')}]`) : ''}`);
+          }
+          console.log(`${chalk.white(res.excerpt)}...`);
+          console.log(chalk.gray('---'));
+        });
       } catch (error: any) {
-        if (error.code === 1) {
-            spinner.info(chalk.yellow("No results found."));
-            return;
-        }
         spinner.fail(chalk.red(`Search failed: ${error.message}`));
       }
     });

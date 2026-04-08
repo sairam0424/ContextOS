@@ -1,45 +1,24 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import fs from "fs-extra";
-import path from "path";
-import { globalIndexer } from "@context-os/core";
+import { workspaceService } from "@context-os/core";
 
 export function syncCommand(program: Command) {
   program
     .command("sync")
     .description("Sync memory, changelog, and daily logs")
     .argument("[project]", "Project name to sync context for")
-    .action(async (project) => {
+    .option("--force", "Force full re-index of the workspace")
+    .action(async (project, options) => {
       const spinner = ora("Syncing workspace context...").start();
       try {
-        const workspaceRoot = process.cwd();
-        const date = new Date().toISOString().split("T")[0];
+        const result = await workspaceService.sync(project, { force: options.force });
         
-        // Simulating sync logic: ensuring memory.md has a "Last Sync" timestamp
-        if (project) {
-          const projectDir = path.join(workspaceRoot, "projects", project);
-          const memoryPath = path.join(projectDir, "memory.md");
-          
-          if (await fs.pathExists(memoryPath)) {
-            let content = await fs.readFile(memoryPath, "utf-8");
-            const syncMark = `\n> [!NOTE]\n> Last Sync: ${date} ${new Date().toLocaleTimeString()}\n`;
-            
-            if (!content.includes("Last Sync:")) {
-              await fs.appendFile(memoryPath, syncMark);
-            } else {
-              content = content.replace(/> \[!NOTE\]\n> Last Sync: .*/, syncMark.trim());
-              await fs.writeFile(memoryPath, content);
-            }
-            spinner.succeed(chalk.green(`Synced memory for ${project}`));
-          } else {
-            spinner.fail(chalk.red(`Memory file not found for ${project}`));
-          }
+        if (result.success) {
+          spinner.succeed(chalk.green(result.message));
+        } else {
+          spinner.fail(chalk.red(result.message));
         }
-        
-        // Auto-refresh the intelligence index
-        await globalIndexer.reindex();
-        spinner.succeed(chalk.green("Workspace synced and indexed."));
       } catch (error: any) {
         spinner.fail(chalk.red(`Sync failed: ${error.message}`));
       }
