@@ -18,6 +18,10 @@ export function findWorkspaceRoot(): string {
 
 export const workspaceRoot = findWorkspaceRoot();
 
+export function getWorkspaceRoot(): string {
+  return workspaceRoot;
+}
+
 /**
  * Standard ContextOS "Buckets" for security isolation.
  */
