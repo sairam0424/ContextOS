@@ -1,4 +1,34 @@
-# ContextOS v1.0.0: The Intelligence Stack Release 🚀
+# ContextOS v1.1.0: The Performance & Verification Release ⚡
+
+- **Version**: `1.1.0` (Current)
+
+---
+
+This release focuses on industrial-grade performance and rigorous verification. By introducing smart incremental indexing and a multi-tier testing framework, we've ensured that ContextOS remains fast and stable as your workspace grows.
+
+## ✨ New in v1.1.0
+
+- **Smart Incremental Indexing**:
+  - Automatically detects file modifications using `mtime` checksums.
+  - Skips unchanged files during sync, reducing latency by **~80%** on incremental runs.
+- **H1 Header Metadata Extraction**: 
+  - Improved compatibility for non-frontmatter files. Dynamically extracts titles from Markdown `#` headers.
+- **4-Tier Verification Suite**:
+  - **Tier 1 (Core)**: domain logic & security isolation.
+  - **Tier 2 (CLI)**: functional command smoke tests.
+  - **Tier 3 (MCP)**: protocol registration stability.
+  - **Tier 4 (Performance)**: automated benchmarking scripts.
+- **Enhanced Grep Fallback**: Resolved search telemetry issues for unindexed patterns.
+
+## 🛠 Stability Fixed
+
+- Fixed metadata parsing for `personality.md` and other root-level files.
+- Resolved search type flagging (distinguishing between 'index' and 'deep' hits).
+- Unified inter-package dependency pinning to ensure monorepo consistency.
+
+---
+
+## ContextOS v1.0.0: The Intelligence Stack Release 🚀
 
 We are proud to announce the first production-grade release of **ContextOS**, the unified intelligence layer for AI agents and developers. This version transforms ContextOS from a collection of scripts into a professional, secure, and scalable NPM monorepo.
 
