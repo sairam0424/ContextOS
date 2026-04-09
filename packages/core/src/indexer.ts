@@ -2,6 +2,8 @@ import path from 'node:path';
 import fs from 'fs-extra';
 import { workspaceRoot, ALLOWED_BUCKETS } from './context.js';
 import { validationService } from './services/validation.js';
+import { DatabaseService } from './services/database.js';
+import { EmbeddingService } from './services/embedding.js';
 
 export interface IndexRecord {
     path: string;
@@ -10,20 +12,29 @@ export interface IndexRecord {
     status: string;
     lastModified: number;
     excerpt: string;
+    content: string;
+    mentions: string[];
 }
 
 export interface ContextIndex {
     version: string;
     lastUpdated: number;
     records: IndexRecord[];
+    provider?: string; // Metadata for which embedding provider was used
 }
 
 export class ContextIndexer {
     private indexPath: string;
     private previousIndex: ContextIndex | null = null;
+    private dbService: DatabaseService;
+    private embeddingService: EmbeddingService;
 
     constructor() {
         this.indexPath = path.join(workspaceRoot, '.context-index.json');
+        this.dbService = new DatabaseService(workspaceRoot);
+        // Load API key if present for Elite mode
+        const geminiKey = process.env.GEMINI_API_KEY;
+        this.embeddingService = new EmbeddingService(geminiKey);
     }
 
     /**
@@ -35,15 +46,20 @@ export class ContextIndexer {
         if (!options.force && await fs.pathExists(this.indexPath)) {
             try {
                 this.previousIndex = await fs.readJSON(this.indexPath);
+                // Upgrade from v1.2.x to v1.3.0 forces a semantic re-index
+                if (this.previousIndex && this.previousIndex.version !== '1.3.0') {
+                    this.previousIndex = null;
+                }
             } catch (e) {
                 this.previousIndex = null;
             }
         }
 
         const index: ContextIndex = {
-            version: '1.2.0',
+            version: '1.3.0',
             lastUpdated: Date.now(),
-            records: []
+            records: [],
+            provider: await this.embeddingService.getProviderName()
         };
 
         const existingRecordMap = new Map<string, IndexRecord>();
@@ -90,7 +106,22 @@ export class ContextIndexer {
                 }
 
                 const record = await this.parseMarkdownFile(fullPath, stats.mtimeMs);
-                if (record) records.push(record);
+                if (record) {
+                    records.push(record);
+                    // 3. SQLite Upsert + Semantic Generation
+                    const { id } = this.dbService.upsertDocument({
+                        path: record.path,
+                        title: record.title,
+                        content: record.content,
+                        excerpt: record.excerpt,
+                        mtime: record.lastModified,
+                        metadata: JSON.stringify(record.tags)
+                    });
+
+                    // Generate Vector for Semantic Layer
+                    const embedding = await this.embeddingService.generate(`${record.title}\n${record.excerpt}\n${record.content}`);
+                    this.dbService.upsertVector(id, embedding, await this.embeddingService.getProviderName());
+                }
             }
         }
     }
@@ -117,14 +148,23 @@ export class ContextIndexer {
                 .replace(/\r?\n/g, ' ')
                 .trim();
 
+            // Entity Extraction
+            const mentions = Array.from(body.matchAll(/@(\w+)/g)).map(m => m[1]);
+            const bodyTags = Array.from(body.matchAll(/#(\w+)/g)).map(m => m[1]);
+            const tags = Array.from(new Set([
+                ...(Array.isArray(metadata.Tags) ? metadata.Tags : (Array.isArray(metadata.tags) ? metadata.tags : [])),
+                ...bodyTags
+            ]));
+
             return {
                 path: relativePath,
                 title,
-                tags: Array.isArray(metadata.Tags) ? metadata.Tags : 
-                      (Array.isArray(metadata.tags) ? metadata.tags : []),
+                tags,
                 status: metadata.status || 'active',
                 lastModified: mtimeMs,
-                excerpt
+                excerpt,
+                content: body,
+                mentions
             };
         } catch (error) {
             console.error(`Failed to index ${filePath}:`, error);

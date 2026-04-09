@@ -23,8 +23,13 @@ export function searchCommand(program: Command) {
         console.log("");
 
         results.forEach(res => {
-          const typeTag = res.type === 'index' ? chalk.cyan('[Index]') : chalk.magenta('[Deep]');
-          console.log(`${typeTag} ${chalk.blue(res.path)}`);
+          let typeTag = chalk.cyan('[Index]');
+          if (res.type === 'deep') typeTag = chalk.magenta('[Deep]');
+          if (res.type === 'semantic') typeTag = chalk.bold.green('[Semantic]');
+          if (res.type === 'hybrid') typeTag = chalk.bold.yellow('[Hybrid]');
+          
+          const scoreDisplay = res.score ? chalk.green(` (${res.score.toFixed(2)})`) : '';
+          console.log(`${typeTag}${scoreDisplay} ${chalk.blue(res.path)}`);
           if (res.title && res.title !== 'Deep Scan Result') {
             console.log(`${chalk.gray(res.title)} ${res.tags.length ? chalk.yellow(`[${res.tags.join(', ')}]`) : ''}`);
           }
