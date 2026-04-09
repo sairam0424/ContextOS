@@ -10,6 +10,8 @@ export interface IndexRecord {
     status: string;
     lastModified: number;
     excerpt: string;
+    content: string;
+    mentions: string[];
 }
 
 export interface ContextIndex {
@@ -35,13 +37,17 @@ export class ContextIndexer {
         if (!options.force && await fs.pathExists(this.indexPath)) {
             try {
                 this.previousIndex = await fs.readJSON(this.indexPath);
+                // Force full reindex if version mismatch (e.g. v1.1.0 -> v1.2.1)
+                if (this.previousIndex && this.previousIndex.version !== '1.2.1') {
+                    this.previousIndex = null;
+                }
             } catch (e) {
                 this.previousIndex = null;
             }
         }
 
         const index: ContextIndex = {
-            version: '1.2.0',
+            version: '1.2.1',
             lastUpdated: Date.now(),
             records: []
         };
@@ -117,14 +123,23 @@ export class ContextIndexer {
                 .replace(/\r?\n/g, ' ')
                 .trim();
 
+            // Entity Extraction
+            const mentions = Array.from(body.matchAll(/@(\w+)/g)).map(m => m[1]);
+            const bodyTags = Array.from(body.matchAll(/#(\w+)/g)).map(m => m[1]);
+            const tags = Array.from(new Set([
+                ...(Array.isArray(metadata.Tags) ? metadata.Tags : (Array.isArray(metadata.tags) ? metadata.tags : [])),
+                ...bodyTags
+            ]));
+
             return {
                 path: relativePath,
                 title,
-                tags: Array.isArray(metadata.Tags) ? metadata.Tags : 
-                      (Array.isArray(metadata.tags) ? metadata.tags : []),
+                tags,
                 status: metadata.status || 'active',
                 lastModified: mtimeMs,
-                excerpt
+                excerpt,
+                content: body,
+                mentions
             };
         } catch (error) {
             console.error(`Failed to index ${filePath}:`, error);

@@ -32,5 +32,7 @@ export const ALLOWED_BUCKETS = [
   "archive",
   "log",
   "orgs",
-  "root"
+  "root",
+  "docs",
+  "prompts"
 ];

@@ -1,6 +1,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
-import { globalIndexer } from "../indexer.js";
+import MiniSearch from "minisearch";
+import { globalIndexer, IndexRecord } from "../indexer.js";
 import { getWorkspaceRoot } from "../context.js";
 
 const execAsync = promisify(exec);
@@ -15,16 +16,42 @@ export interface SearchResult {
 }
 
 export class IntelligenceService {
+  private miniSearch: MiniSearch<IndexRecord> | null = null;
+
+  private async getIndex() {
+    if (this.miniSearch) return this.miniSearch;
+
+    const indexData = await globalIndexer.reindex();
+    this.miniSearch = new MiniSearch({
+      fields: ['title', 'tags', 'excerpt', 'content', 'path'],
+      storeFields: ['path', 'title', 'tags', 'excerpt'],
+      searchOptions: {
+        boost: { title: 2, tags: 1.5 },
+        fuzzy: 0.2,
+        prefix: true
+      }
+    });
+
+    this.miniSearch.addAll(indexData.records.map((r, i) => ({ ...r, id: i })));
+    return this.miniSearch;
+  }
+
   /**
-   * Hybrid Search: Metadata Index -> Grep Fallback
+   * Hybrid Search: Semantic-Lite Index (MiniSearch) -> Grep Fallback
    */
   async search(query: string, options: { deep?: boolean } = {}): Promise<SearchResult[]> {
-    // 1. Try Metadata Index First
+    // 1. Try MiniSearch Index First (Semantic-Lite)
     if (!options.deep) {
-      const results = await globalIndexer.search(query);
+      const ms = await this.getIndex();
+      const results = ms.search(query);
+      
       if (results.length > 0) {
         return results.map(res => ({
-          ...res,
+          path: res.path,
+          title: res.title,
+          tags: res.tags,
+          excerpt: res.excerpt,
+          score: res.score,
           type: 'index'
         }));
       }
@@ -32,16 +59,19 @@ export class IntelligenceService {
 
     // 2. Fallback to Deep Scan (Grep)
     const workspaceRoot = getWorkspaceRoot();
+    // Use -I to skip binaries, and limit line length to avoid buffer overflow
     const command = `grep -rnIE "${query}" . | head -n 20`;
     
     try {
-      const { stdout } = await execAsync(command, { cwd: workspaceRoot });
+      const { stdout } = await execAsync(command, { 
+        cwd: workspaceRoot,
+        maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+      });
       if (!stdout) return [];
 
-      // Parse grep output: file:line:content
       return stdout.split('\n')
-        .filter(line => line.trim())
-        .map(line => {
+        .filter((line: string) => line.trim())
+        .map((line: string) => {
           const [filePath, ...rest] = line.split(':');
           const content = rest.join(':').trim();
           return {
@@ -59,8 +89,10 @@ export class IntelligenceService {
   }
 
   async extract(text: string): Promise<string[]> {
-    // Shared extraction logic could go here later (v2.0)
-    return [];
+    // Phase 2: Entity extraction from raw text for relationship mapping
+    const mentions = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
+    const tags = Array.from(text.matchAll(/#(\w+)/g)).map(m => m[1]);
+    return Array.from(new Set([...mentions, ...tags]));
   }
 }
 
