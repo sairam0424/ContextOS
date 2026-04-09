@@ -14,3 +14,6 @@ npm_cache/
 
 prompts/
 
+\n# ContextOS Data Warehouse\n.context-db/
+
+.context-db/

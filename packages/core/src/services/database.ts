@@ -18,7 +18,7 @@ export class DatabaseService {
   private dbPath: string;
 
   constructor(workspaceRoot: string) {
-    const dbDir = path.join(workspaceRoot, 'context-db');
+    const dbDir = path.join(workspaceRoot, '.context-db');
     fs.ensureDirSync(dbDir);
     this.dbPath = path.join(dbDir, 'context.db');
     

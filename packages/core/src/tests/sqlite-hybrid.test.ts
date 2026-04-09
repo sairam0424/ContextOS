@@ -9,20 +9,20 @@ describe('Hybrid SQLite-Vec Intelligence Engine (v1.3.0)', () => {
     
     before(async () => {
         // Clean up previous test DB if any
-        const dbPath = path.join(workspaceRoot, 'context-db', 'context.db');
+        const dbPath = path.join(workspaceRoot, '.context-db', 'context.db');
         if (await fs.pathExists(dbPath)) {
             // No-op for now to keep data if needed, but usually tests should be clean
         }
     });
 
-    it('should initialize the SQLite database in context-db/', async () => {
-        const dbPath = path.join(workspaceRoot, 'context-db', 'context.db');
+    it('should initialize the SQLite database in .context-db/', async () => {
+        const dbPath = path.join(workspaceRoot, '.context-db', 'context.db');
         const exists = await fs.pathExists(dbPath);
         // If not exists yet, reindex will create it
         if (!exists) {
             await globalIndexer.reindex({ force: true });
         }
-        assert.ok(await fs.pathExists(dbPath), 'Database file should exist in context-db/');
+        assert.ok(await fs.pathExists(dbPath), 'Database file should exist in .context-db/');
     });
 
     it('should generate and store local embeddings during indexing', async () => {
