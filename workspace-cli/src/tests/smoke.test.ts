@@ -26,9 +26,9 @@ describe("CLI Experience Layer (Smoke Tests)", () => {
         });
     });
 
-    it("should report version 1.0.1", () => {
+    it("should report version 1.1.0", () => {
         const output = execSync(`node ${cliPath} --version`).toString();
-        assert.strictEqual(output.trim(), "1.0.1");
+        assert.strictEqual(output.trim(), "1.1.0");
     });
 
     describe("Functional Commands", () => {
