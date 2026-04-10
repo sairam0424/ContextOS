@@ -5,18 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ContextOS | Visual Control Center</title>
     <!-- Premium CDNs -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/3d-force-graph"></script>
+    <script src="https://unpkg.com/force-graph"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root {
-            --bg: #0a0a0c;
-            --surface: rgba(255, 255, 255, 0.05);
-            --border: rgba(255, 255, 255, 0.1);
-            --primary: #00f2ff;
-            --secondary: #7000ff;
-            --text: #e0e0e0;
-            --text-dim: #999;
+            --bg: #0c1324;
+            --surface: rgba(12, 19, 36, 0.6);
+            --surface-bright: rgba(25, 31, 49, 0.8);
+            --primary: #00f0ff;
+            --secondary: #a855f7;
+            --text: #dce1fb;
+            --text-dim: #849495;
             --accent: #ff0055;
+            --glow: 0 0 20px rgba(0, 240, 255, 0.3);
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-body: 'Inter', sans-serif;
         }
 
         body, html {
@@ -26,141 +33,157 @@
             height: 100%;
             background: var(--bg);
             color: var(--text);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: var(--font-body);
             overflow: hidden;
+            background-image: 
+                radial-gradient(circle at 50% -20%, #1a2a44 0%, transparent 50%),
+                radial-gradient(circle at -10% 50%, #151b2d 0%, transparent 40%);
+        }
+
+        /* Scanline Effect */
+        body::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 100;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+            opacity: 0.15;
         }
 
         /* Glassmorphic UI Overlay */
         #ui-layer {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none;
             z-index: 10;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            display: grid;
+            grid-template-areas: 
+                "header header header"
+                "sidebar content inspector"
+                "footer footer footer";
+            grid-template-rows: auto 1fr auto;
+            grid-template-columns: 320px 1fr 320px;
             padding: 24px;
             box-sizing: border-box;
+            gap: 20px;
         }
 
         .hud-card {
             background: var(--surface);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(132, 148, 149, 0.15);
             border-radius: 12px;
-            padding: 16px;
+            padding: 20px;
             pointer-events: auto;
             box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
         .hud-card:hover {
-            border-color: var(--primary);
-            box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+            border-color: rgba(0, 240, 255, 0.4);
+            background: var(--surface-bright);
+            transform: translateY(-2px);
         }
 
         header {
+            grid-area: header;
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
-        }
-
-        #brand {
-            display: flex;
             align-items: center;
-            gap: 12px;
         }
 
         #brand h1 {
+            font-family: var(--font-display);
             margin: 0;
-            font-size: 20px;
-            letter-spacing: 2px;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: 3px;
             text-transform: uppercase;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: var(--primary);
+            text-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
         }
 
-        #health-ring {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            border: 4px solid var(--border);
+        .health-gauge {
             display: flex;
             align-items: center;
-            justify-content: center;
-            position: relative;
+            gap: 20px;
         }
 
-        #health-value {
-            font-weight: bold;
-            font-size: 14px;
-            color: var(--primary);
+        /* Sidebar & Inspector */
+        #sidebar { grid-area: sidebar; display: flex; flex-direction: column; gap: 20px; }
+        #inspector { 
+            grid-area: inspector; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 20px; 
+            transform: translateX(350px);
+            transition: transform 0.5s ease;
         }
-
-        /* Sidebar Stats */
-        #sidebar {
-            width: 280px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .stat-group {
-            margin-bottom: 12px;
-        }
+        #inspector.active { transform: translateX(0); }
 
         .stat-label {
-            font-size: 10px;
+            font-family: var(--font-display);
+            font-size: 11px;
             text-transform: uppercase;
-            color: var(--text-dim);
-            letter-spacing: 1px;
-            margin-bottom: 8px;
+            color: var(--primary);
+            letter-spacing: 2px;
+            margin-bottom: 15px;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            opacity: 0.8;
         }
 
         .tag-pill {
             display: inline-block;
-            padding: 4px 8px;
-            background: rgba(112, 0, 255, 0.2);
-            border: 1px solid rgba(112, 0, 255, 0.4);
-            border-radius: 4px;
+            padding: 5px 12px;
+            background: rgba(168, 85, 247, 0.1);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 20px;
             font-size: 11px;
-            margin-right: 4px;
-            margin-bottom: 4px;
+            margin: 0 6px 6px 0;
             color: #d8b4ff;
+            cursor: pointer;
+        }
+
+        .tag-pill:hover { background: rgba(168, 85, 247, 0.3); }
+
+        /* Bottom Status Bar */
+        footer {
+            grid-area: footer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .ticker-text {
+            font-family: var(--font-display);
+            font-size: 10px;
+            color: var(--primary);
+            white-space: nowrap;
+            overflow: hidden;
+            width: 300px;
+            letter-spacing: 1px;
         }
 
         /* 3D Graph Container */
         #graph-container {
-            width: 100%;
-            height: 100%;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
         }
 
-        /* Node Tooltip Styling */
         .node-tooltip {
-            background: rgba(0,0,0,0.85);
+            background: rgba(12, 19, 36, 0.95);
             border: 1px solid var(--primary);
-            padding: 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            line-height: 1.4;
-            max-width: 200px;
-        }
-
-        /* Bottom Status Bar */
-        footer {
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 11px;
-            color: var(--text-dim);
+            padding: 12px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            font-family: var(--font-body);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
         .pulse-dot {
@@ -185,81 +208,206 @@
     <div id="ui-layer">
         <header>
             <div class="hud-card" id="brand">
-                <i data-lucide="box"></i>
+                <i data-lucide="brain-circuit" style="color: var(--primary);"></i>
                 <div>
                     <h1>ContextOS</h1>
-                    <div style="font-size: 10px; color: var(--text-dim);">Spatial Intelligence Layer</div>
+                    <div style="font-size: 10px; color: var(--text-dim); letter-spacing: 1px;">Spatial Intelligence Protocol</div>
                 </div>
             </div>
 
-            <div class="hud-card" style="display: flex; align-items: center; gap: 16px;">
+            <div class="hud-card health-gauge">
                 <div style="text-align: right;">
-                    <div class="stat-label">Workspace Health</div>
-                    <div style="font-size: 20px; font-weight: bold; color: var(--primary);" id="health-text">98%</div>
+                    <div class="stat-label" style="margin:0">Workspace Stability</div>
+                    <div style="font-size: 18px; font-weight: 700; color: var(--primary); font-family: var(--font-display);" id="health-text">--%</div>
                 </div>
-                <div id="health-ring">
-                   <div id="health-value">--</div>
+                <div id="health-ring" style="width:40px; height:40px; border-width: 2px;">
+                   <div id="health-value" style="font-size: 12px;">--</div>
                 </div>
             </div>
         </header>
 
-        <main style="flex: 1; display: flex; align-items: flex-end;">
-            <div id="sidebar">
-                <div class="hud-card">
-                    <div class="stat-label"><i data-lucide="trending-up"></i> Trending Context</div>
-                    <div id="tag-container">
-                        <!-- Tags injected here -->
-                    </div>
-                </div>
-
-                <div class="hud-card">
-                    <div class="stat-label"><i data-lucide="activity"></i> Recent Activity</div>
-                    <div id="activity-list" style="font-size: 12px;">
-                        <!-- Activity injected here -->
-                    </div>
-                </div>
+        <aside id="sidebar">
+            <div class="hud-card">
+                <div class="stat-label"><i data-lucide="zap" size="14"></i> Trending Context</div>
+                <div id="tag-container"></div>
             </div>
-        </main>
 
-        <footer>
-            <div class="hud-card" style="display: flex; align-items: center; gap: 12px; padding: 6px 16px;">
-                <div class="pulse-dot"></div>
-                <span>LIVE TELEMETRY: CONNECTED</span>
-                <span style="opacity: 0.3;">|</span>
-                <span id="timestamp">SYNCING...</span>
+            <div class="hud-card" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                <div class="stat-label"><i data-lucide="radio" size="14"></i> Live Activity</div>
+                <div id="activity-list" style="flex:1; overflow-y: auto; padding-right: 8px;"></div>
+            </div>
+        </aside>
+
+        <section id="inspector" class="hud-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                <div class="stat-label" style="margin:0"><i data-lucide="info" size="14"></i> Node Inspector</div>
+                <button onclick="closeInspector()" style="background: none; border: none; color: var(--text-dim); cursor: pointer;"><i data-lucide="x" size="16"></i></button>
             </div>
             
-            <div class="hud-card" style="padding: 6px 16px;">
-                SPATIAL ENGINE: V1.6.0
+            <div id="inspector-content">
+                <div style="text-align: center; padding: 40px 20px; opacity: 0.4;">
+                    <i data-lucide="mouse-pointer-2" size="32" style="margin-bottom: 16px;"></i>
+                    <p style="font-size: 12px;">Select an entity to reveal its spatial soul</p>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <div class="hud-card" style="display: flex; align-items: center; gap: 15px; padding: 8px 16px;">
+                <div class="pulse-dot"></div>
+                <div class="ticker-text" id="system-ticker">INITIALIZING AETHER CORE... READY.</div>
+                <span id="timestamp" style="font-family: var(--font-display); font-size: 12px;">--:--:--</span>
+            </div>
+            
+            <div class="hud-card" style="padding: 8px 16px; font-family: var(--font-display); letter-spacing: 1px; font-size: 10px;">
+                DECK: <span style="color: var(--primary)">V1.6.1-AETHER</span>
             </div>
         </footer>
     </div>
 
     <script>
-        // Lucide Icons
         lucide.createIcons();
 
         let Graph;
+        let selectedNode = null;
         
         async function init() {
-            // Initial Graph setup
-            Graph = ForceGraph3D()(document.getElementById('graph-container'))
-                .backgroundColor('#0a0a0c')
-                .showNavInfo(false)
-                .nodeLabel(node => `<div class="node-tooltip"><b>${node.label}</b><br/><small style="opacity: 0.6">${node.id}</small></div>`)
-                .nodeAutoColorBy('type')
-                .linkDirectionalArrowLength(3.5)
-                .linkDirectionalArrowRelPos(1);
+            console.log("Initializing Spatial Engine...");
+            const container = document.getElementById('graph-container');
+            
+            try {
+                if (window.ForceGraph3D) {
+                    Graph = ForceGraph3D()(container)
+                        .backgroundColor('rgba(0,0,0,0)') // Use CSS background
+                        .showNavInfo(false)
+                        .nodeLabel(null) // Custom tooltips instead
+                        .nodeAutoColorBy('type')
+                        .linkWidth(1)
+                        .linkColor(() => 'rgba(255,255,255,0.1)')
+                        .linkDirectionalParticles(2)
+                        .linkDirectionalParticleSpeed(d => (d.weight || 1) * 0.005)
+                        .linkDirectionalParticleWidth(2)
+                        .onNodeClick(node => inspectNode(node))
+                        .onBackgroundClick(() => closeInspector());
 
-            // Refine node appearance
-            Graph.nodeThreeObject(node => {
-                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ color: node.type === 'tag' ? '#7000ff' : '#00f2ff' }));
-                sprite.scale.set(node.type === 'tag' ? 8 : 12, node.type === 'tag' ? 8 : 12, 1);
-                return sprite;
-            });
+                    // Aether Custom Geometries
+                    Graph.nodeThreeObject(node => {
+                        let geometry;
+                        let color = node.type === 'tag' ? '#a855f7' : '#00f0ff';
+                        
+                        if (node.type === 'tag') {
+                            geometry = new THREE.TetrahedronGeometry(8);
+                        } else if (node.type === 'person') {
+                            geometry = new THREE.OctahedronGeometry(10);
+                            color = '#ffcc00';
+                        } else {
+                            geometry = new THREE.SphereGeometry(12, 16, 16);
+                        }
+
+                        const material = new THREE.MeshPhongMaterial({
+                            color: color,
+                            transparent: true,
+                            opacity: 0.9,
+                            shininess: 100,
+                            emissive: color,
+                            emissiveIntensity: 0.5
+                        });
+                        
+                        return new THREE.Mesh(geometry, material);
+                    });
+
+                    // Lighting & Atmosphere
+                    const scene = Graph.scene();
+                    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+                    const point = new THREE.PointLight(0x00f0ff, 1, 500);
+                    point.position.set(100, 100, 100);
+                    scene.add(ambient);
+                    scene.add(point);
+
+                    // Auto-Orbit
+                    let angle = 0;
+                    setInterval(() => {
+                        if (!selectedNode) {
+                            angle += 0.001;
+                            Graph.cameraPosition({
+                                x: 400 * Math.sin(angle),
+                                z: 400 * Math.cos(angle)
+                            });
+                        }
+                    }, 50);
+                }
+            } catch (e) {
+                console.warn("Aether 3D Engine failed, engaging 2D fallback:", e);
+                container.innerHTML = '';
+                Graph = ForceGraph()(container)
+                    .backgroundColor('rgba(0,0,0,0)')
+                    .nodeLabel(node => `<div class="node-tooltip"><b>${node.label}</b><br/>${node.id}</div>`)
+                    .nodeAutoColorBy('type')
+                    .linkDirectionalParticles(2)
+                    .linkDirectionalParticleSpeed(d => (d.weight || 1) * 0.01)
+                    .onNodeClick(node => inspectNode(node));
+            }
 
             await updateData();
-            setInterval(updateData, 5000); // 5s refresh
+            setInterval(updateData, 5000);
+        }
+
+        function inspectNode(node) {
+            selectedNode = node;
+            const inspector = document.getElementById('inspector');
+            const content = document.getElementById('inspector-content');
+            
+            inspector.classList.add('active');
+            
+            content.innerHTML = `
+                <div style="padding: 10px;">
+                    <div style="color: var(--primary); font-family: var(--font-display); font-size: 18px; margin-bottom: 5px;">${node.label}</div>
+                    <div style="font-size: 11px; opacity: 0.5; margin-bottom: 20px; font-family: monospace;">${node.id}</div>
+                    
+                    <div class="stat-label" style="font-size: 9px;">Intelligence Metadata</div>
+                    <div class="hud-card" style="margin-bottom: 15px; background: rgba(0,0,0,0.2); padding: 12px;">
+                        <div style="font-size: 12px; line-height: 1.6;">
+                            ${node.metadata?.excerpt || 'Scanning for latent semantic patterns...'}
+                        </div>
+                    </div>
+
+                    <div class="stat-label" style="font-size: 9px;">Entity Classification</div>
+                    <div style="margin-bottom: 20px;">
+                        <span class="tag-pill" style="border-color: var(--primary); color: var(--primary);">Type: ${node.type}</span>
+                        <span class="tag-pill">Access: Federated</span>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button class="hud-card" style="flex:1; padding: 10px; font-size: 11px; text-transform: uppercase; cursor: pointer;" onclick="copyPath('${node.id}')">
+                            <i data-lucide="copy" size="12"></i> Copy Path
+                        </button>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+            
+            // Focus camera in 3D
+            if (Graph && Graph.cameraPosition) {
+                const distance = 150;
+                const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+                Graph.cameraPosition(
+                    { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+                    node,
+                    2000
+                );
+            }
+        }
+
+        function closeInspector() {
+            selectedNode = null;
+            document.getElementById('inspector').classList.remove('active');
+        }
+
+        function copyPath(id) {
+            navigator.clipboard.writeText(id);
+            const ticker = document.getElementById('system-ticker');
+            ticker.textContent = `SYSTEM CLASSIFIER: PATH COPIED [${id}]`;
+            setTimeout(() => { ticker.textContent = "IDLE MONITORS ACTIVE... STANDBY."; }, 3000);
         }
 
         async function updateData() {
@@ -269,30 +417,34 @@
                     fetch('/api/pulse').then(r => r.json())
                 ]);
 
-                // Update Graph
                 Graph.graphData(graphRes);
 
-                // Update Pulse HUD
                 document.getElementById('health-text').textContent = `${pulseRes.healthScore}%`;
                 document.getElementById('health-value').textContent = pulseRes.healthScore;
                 document.getElementById('timestamp').textContent = new Date(pulseRes.timestamp).toLocaleTimeString();
+                
+                // Ticker logic
+                if (pulseRes.recentChanges.length > 0) {
+                    document.getElementById('system-ticker').textContent = `PULSE DETECTED: SYNCING [${pulseRes.recentChanges[0]}]`;
+                }
 
-                // Update Tags
                 const tagContainer = document.getElementById('tag-container');
                 tagContainer.innerHTML = pulseRes.topTags.map(tag => 
                     `<span class="tag-pill">#${tag}</span>`
                 ).join('');
 
-                // Update Activity
                 const activityList = document.getElementById('activity-list');
                 activityList.innerHTML = pulseRes.recentChanges.map(change => 
-                    `<div style="margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.8;">
-                        <span style="color: var(--primary); margin-right: 6px;">•</span> ${change}
+                    `<div class="hud-card" style="margin-bottom: 10px; padding: 12px; font-size: 11px; box-shadow: none;">
+                        <div style="color: var(--primary); margin-bottom: 4px; font-family: var(--font-display); font-size: 9px; opacity: 0.6;">RECENT SYNC</div>
+                        <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${change}</div>
                      </div>`
                 ).join('');
 
+                lucide.createIcons();
             } catch (e) {
-                console.error("Dashboard Sync Failed:", e);
+                console.error("Aether Bridge Failure:", e);
+                document.getElementById('system-ticker').textContent = "ERROR: SPATIAL BRIDGE COLLAPSED. RETRYING...";
             }
         }
 
