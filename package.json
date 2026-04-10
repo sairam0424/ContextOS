@@ -8,6 +8,7 @@
   "workspaces": [
     "workspace-cli",
     "workspace-mcp",
+    "workspace-dashboard",
     "packages/core"
   ],
   "scripts": {
