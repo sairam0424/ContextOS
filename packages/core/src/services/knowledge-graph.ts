@@ -33,7 +33,6 @@ export class KnowledgeGraphService {
      */
     async getGraph(): Promise<WorkspaceGraph> {
         const nodes: GraphNode[] = [];
-        const edges: GraphEdge[] = [];
         const seenNodes = new Set<string>();
 
         // 1. Load all documents from the database
@@ -50,38 +49,29 @@ export class KnowledgeGraphService {
                 });
                 seenNodes.add(doc.path);
             }
-
-            // 2. Extract Explicit Links (Tags/Mentions from metadata JSON)
-            const metadata = JSON.parse(doc.metadata || '[]');
-            metadata.forEach((tag: string) => {
-                const tagId = `tag:${tag}`;
-                if (!seenNodes.has(tagId)) {
-                    nodes.push({ id: tagId, label: tag, type: 'tag', metadata: {} });
-                    seenNodes.add(tagId);
-                }
-                edges.push({ source: doc.path, target: tagId, type: 'tag', weight: 1.0 });
-            });
-
-            // 3. Find Semantic Bridges (similarity > 0.85)
-            // We'll query for similar documents for each doc
-            if (doc.id !== undefined) {
-                const vector = this.dbService.getVectorForDocument(doc.id);
-                if (vector) {
-                    const similar = this.dbService.searchSemantic(vector, 10);
-                    similar.forEach((match: { path: string; distance: number }) => {
-                        // Only bridge if similarity is high and it's not the same doc
-                        if (match.path !== doc.path && (1 - match.distance) > 0.85) {
-                            edges.push({
-                                source: doc.path,
-                                target: match.path,
-                                type: 'semantic',
-                                weight: 1 - match.distance
-                            });
-                        }
-                    });
-                }
-            }
         }
+
+        // 2. Load all persistent edges
+        const dbEdges = this.dbService.getAllEdges();
+        const edges: GraphEdge[] = dbEdges.map(e => ({
+            source: e.source,
+            target: e.target,
+            type: e.type,
+            weight: e.weight
+        }));
+
+        // 3. Add virtual nodes for tags that don't have documents
+        edges.forEach(edge => {
+            if (edge.type === 'tag' && !seenNodes.has(edge.target)) {
+                nodes.push({
+                    id: edge.target,
+                    label: edge.target.replace('tag:', ''),
+                    type: 'tag',
+                    metadata: {}
+                });
+                seenNodes.add(edge.target);
+            }
+        });
 
         return { nodes, edges };
     }

@@ -1,81 +1,71 @@
-import fs from 'node:fs';
 import path from 'node:path';
+import chokidar, { FSWatcher } from 'chokidar';
 import { workspaceRoot, ALLOWED_BUCKETS } from '../context.js';
 import { globalIndexer } from '../indexer.js';
 import { samplingService } from './sampling.js';
 
 export class WatchService {
-    private watchers: fs.FSWatcher[] = [];
-    private debouncers: Map<string, NodeJS.Timeout> = new Map();
-    private DEBOUNCE_MS = 300;
+    private watcher: FSWatcher | null = null;
 
     /**
      * Starts watching the allowed buckets for changes.
      */
     public start() {
-        console.log('📡 Starting ContextOS Watch Service...');
+        console.log('📡 Starting ContextOS Sentinel (Chokidar)...');
 
-        for (const bucket of ALLOWED_BUCKETS) {
-            const bucketPath = path.join(workspaceRoot, bucket);
-            if (!fs.existsSync(bucketPath)) continue;
-
-            try {
-                // On macOS, recursive: true is supported and very efficient
-                const watcher = fs.watch(bucketPath, { recursive: true }, (eventType, filename) => {
-                    if (!filename || !filename.endsWith('.md')) return;
-
-                    const fullPath = path.join(bucketPath, filename);
-                    this.debounceChange(fullPath);
-                });
-
-                this.watchers.push(watcher);
-                console.log(`  - Watching [${bucket}]`);
-            } catch (error) {
-                console.error(`  - Failed to watch [${bucket}]:`, error);
+        const pathsToWatch = ALLOWED_BUCKETS.map(bucket => path.join(workspaceRoot, bucket));
+        
+        this.watcher = chokidar.watch(pathsToWatch, {
+            ignored: /(^|[\/\\])\../, // ignore dotfiles
+            persistent: true,
+            ignoreInitial: true,
+            awaitWriteFinish: {
+                stabilityThreshold: 100,
+                pollInterval: 100
             }
-        }
+        });
+
+        this.watcher
+            .on('add', (filePath: string) => this.handleEvent(filePath))
+            .on('change', (filePath: string) => this.handleEvent(filePath))
+            .on('unlink', (filePath: string) => this.handleDeletion(filePath))
+            .on('error', (error: any) => console.error(`[Sentinel] Watch Error: ${error}`));
+
+        console.log(`  - Monitoring buckets: ${ALLOWED_BUCKETS.join(', ')}`);
     }
 
     /**
-     * Stops all active watchers.
+     * Stops the watcher.
      */
     public stop() {
-        for (const watcher of this.watchers) {
-            watcher.close();
+        if (this.watcher) {
+            this.watcher.close();
+            this.watcher = null;
         }
-        this.watchers = [];
-        console.log('🛑 Watch Service stopped.');
-    }
-
-    private debounceChange(filePath: string) {
-        if (this.debouncers.has(filePath)) {
-            clearTimeout(this.debouncers.get(filePath));
-        }
-
-        const timeout = setTimeout(async () => {
-            this.debouncers.delete(filePath);
-            await this.handleEvent(filePath);
-        }, this.DEBOUNCE_MS);
-
-        this.debouncers.set(filePath, timeout);
+        console.log('🛑 Sentinel stopped.');
     }
 
     private async handleEvent(filePath: string) {
+        if (!filePath.endsWith('.md')) return;
         const relativePath = path.relative(workspaceRoot, filePath);
         
         try {
-            if (fs.existsSync(filePath)) {
-                console.log(`📝 Change detected: ${relativePath}`);
-                await globalIndexer.indexFile(filePath);
-            } else {
-                console.log(`🗑️ Deletion detected: ${relativePath}`);
-                await globalIndexer.removeFile(relativePath);
-            }
-
-            // Invalidate Sampling cache to ensure pulse is fresh
+            console.log(`📝 Change detected: ${relativePath}`);
+            await globalIndexer.indexFile(filePath);
             samplingService.flushCache();
         } catch (error) {
             console.error(`❌ Watch error for ${relativePath}:`, error);
+        }
+    }
+
+    private async handleDeletion(filePath: string) {
+        const relativePath = path.relative(workspaceRoot, filePath);
+        try {
+            console.log(`🗑️ Deletion detected: ${relativePath}`);
+            await globalIndexer.removeFile(relativePath);
+            samplingService.flushCache();
+        } catch (error) {
+            console.error(`❌ Deletion error for ${relativePath}:`, error);
         }
     }
 }

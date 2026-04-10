@@ -139,6 +139,27 @@ export class ContextIndexer {
             const embedding = await this.embeddingService.generate(`${record.title}\n${record.excerpt}\n${record.content}`);
             this.dbService.upsertVector(id, embedding, await this.embeddingService.getProviderName());
 
+            // 1b. Graph Edge Extraction (Incremental)
+            this.dbService.removeEdgesForSource(record.path);
+            
+            // Explicit Links: Tags
+            record.tags.forEach(tag => {
+                this.dbService.upsertEdge(record.path, `tag:${tag}`, 'tag', 1.0);
+            });
+
+            // Explicit Links: Mentions
+            record.mentions.forEach(mention => {
+                this.dbService.upsertEdge(record.path, mention, 'mention', 1.0);
+            });
+
+            // Implicit Links: Semantic Bridges (Similarity > 0.85)
+            const matches = this.dbService.searchSemantic(embedding, 10);
+            matches.forEach(match => {
+                if (match.path !== record.path && (1 - match.distance) > 0.85) {
+                    this.dbService.upsertEdge(record.path, match.path, 'semantic', 1 - match.distance);
+                }
+            });
+
             // 2. Update JSON Index (if it exists)
             await this.updateJsonIndex(record);
         }
