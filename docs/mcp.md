@@ -1,39 +1,48 @@
-# ContextOS MCP Server (`workspace-mcp`)
+# 🔌 ContextOS MCP Server (`@context-os/mcp`)
 
-The `workspace-mcp` server provides a programmable interface for interacting with ContextOS, designed to be used by AI agents (e.g., Cursor, Claude, local agents).
+The `@context-os/mcp` server provides a secure, programmable bridge between your favorite AI agents (Cursor, Claude, etc.) and your ContextOS workspace.
 
-## Installation
+---
+
+## 🚀 Quick Usage (NPX)
+
+The recommended way to run the MCP server is via **NPX**. This ensures you are always using the latest protocol definitions.
 
 ```bash
-cd workspace-mcp
-npm install
-npm run build
+npx -y @context-os/mcp@latest
 ```
 
-## Tools
+---
 
-### `workspace_read`
-Read context and metadata for a specific project.
-- Scopes file access to projects and knowledge directories
-- Enforces read-only safety for protected files
+## 🛠️ Tool Registry
 
-### `workspace_write`
-Update the project context file.
-- Deterministic appends for log entries
-- Structural updates for ADRs
+AI agents can interact with the following tools once connected via MCP:
+
+### `workspace_context`
+Get a high-fidelity snapshot of the current project state.
+- **Includes**: Personality (Soul), Mission, Warm Memory, and Active Goals.
 
 ### `workspace_search`
-Search across knowledge and projects.
-- Restricted grep-based search within workspace boundaries
-- No shell injection risk
+Execute a deep structural search across the intelligence mesh.
+- **Function**: Grep-based search restricted to allowed workspace buckets.
+
+### `workspace_daily_update`
+Log agentic activity into the Hot memory (daily logs).
+- **Function**: Appends atomic progress notes to the current project's daily log.
 
 ### `workspace_memory_update`
-Sync the current project history into long-term memory.
-- Automates memory lifecycle transitions
-- Structures memory with timestamps and importance levels
+Perform a manual or autonomous memory sync.
+- **Function**: Merges context from daily logs into the long-term `memory.md` knowledge base.
 
-## Security Hardening
-The MCP server includes:
-- Bucket-based path validation to prevent directory traversal
-- Strict read-only enforcement for root configuration files
-- Environment isolation for third-party scripts
+---
+
+## 🔒 Security Hardening
+
+The MCP server is the primary enforcement layer for workspace safety:
+- **Bucket-based path validation**: Prevents directory traversal attacks (`sys/`, `usr/`, etc.).
+- **Strict Read-Only Enforcement**: Agents are physically blocked from writing to `root/`, `knowledge/`, or `schemas/`.
+- **Atomic Commits**: Every write operation is automatically committed to Git for a permanent audit trail.
+
+---
+
+*Identity: Antigravity v1.6.1 (Aether)*

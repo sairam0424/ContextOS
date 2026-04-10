@@ -15,7 +15,7 @@
   },
   "main": "dist/index.js",
   "bin": {
-    "context-os": "./dist/index.js"
+    "context-os": "dist/index.js"
   },
   "files": [
     "dist",
