@@ -1,6 +1,6 @@
 {
   "name": "@context-os/cli",
-  "version": "1.1.0",
+  "version": "1.6.1",
   "description": "ContextOS Developer Interface Layer",
   "keywords": [
     "context-os",
@@ -42,7 +42,7 @@
     "front-matter": "^4.0.2",
     "fs-extra": "^11.2.0",
     "ora": "^8.0.1",
-    "@context-os/core": "1.1.0"
+    "@context-os/core": "1.6.1"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",

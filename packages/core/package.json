@@ -1,6 +1,6 @@
 {
   "name": "@context-os/core",
-  "version": "1.1.0",
+  "version": "1.6.1",
   "description": "Shared intelligence layer, schemas, and security buckets for ContextOS",
   "type": "module",
   "main": "dist/index.js",
