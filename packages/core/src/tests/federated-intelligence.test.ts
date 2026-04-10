@@ -40,6 +40,12 @@ describe('Federated Intelligence Layer (v1.4.0)', () => {
         const v = new Float32Array(384).fill(0.1);
         dbService.upsertVector(doc1.id, v, 'local');
         dbService.upsertVector(doc2.id, v, 'local');
+
+        // Explicitly create edges that would normally be discovered by indexer
+        dbService.upsertEdge('test-v14-a.md', 'tag:federation', 'tag', 1.0);
+        dbService.upsertEdge('test-v14-a.md', 'tag:contextos', 'tag', 1.0);
+        dbService.upsertEdge('test-v14-b.md', 'tag:federation', 'tag', 1.0);
+        dbService.upsertEdge('test-v14-a.md', 'test-v14-b.md', 'semantic', 1.0);
     });
 
     after(() => {
