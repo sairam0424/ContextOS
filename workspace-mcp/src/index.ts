@@ -8,6 +8,8 @@ import { registerContextTool } from "./tools/context.js";
 import { registerDecisionTool } from "./tools/decision.js";
 import { registerMemoryTool } from "./tools/memory.js";
 import { registerDailyTool } from "./tools/daily.js";
+import { registerSamplingTool } from "./tools/sampling.js";
+import { registerResources } from "./resources.js";
 
 async function main() {
   const server = new McpServer({
@@ -23,6 +25,10 @@ async function main() {
   registerDecisionTool(server);
   registerMemoryTool(server);
   registerDailyTool(server);
+  registerSamplingTool(server);
+
+  // Register Resources
+  registerResources(server);
 
   // Connect via stdio
   const transport = new StdioServerTransport();

@@ -149,6 +149,28 @@ export class DatabaseService {
     return this.db.prepare('SELECT * FROM documents WHERE path = ?').get(filePath) as DBRecord | undefined;
   }
 
+  public getAllDocuments() {
+    return this.db.prepare('SELECT * FROM documents').all() as DBRecord[];
+  }
+
+  public getVectorForDocument(docId: number) {
+    const row = this.db.prepare('SELECT embedding FROM vec_documents WHERE id = ?').get(docId) as { embedding: Buffer } | undefined;
+    return row ? new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4) : undefined;
+  }
+
+  public searchSemantic(queryEmbedding: Float32Array, limit: number = 10) {
+    const stmt = this.db.prepare(`
+      SELECT 
+        d.path, d.title, d.excerpt,
+        vec_distance_cosine(v.embedding, ?) as distance
+      FROM vec_documents v
+      JOIN documents d ON v.id = d.id
+      ORDER BY distance ASC
+      LIMIT ?
+    `);
+    return stmt.all(Buffer.from(queryEmbedding.buffer), limit) as any[];
+  }
+
   public close() {
     this.db.close();
   }

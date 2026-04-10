@@ -16,6 +16,7 @@ import { extractCommand } from "./commands/extract.js";
 import { tagCommand } from "./commands/tag.js";
 import { validateCommand } from "./commands/validate.js";
 import { indexCommand } from "./commands/index-cmd.js";
+import { graphCommand } from "./commands/graph.js";
 
 const program = new Command();
 
@@ -40,6 +41,7 @@ extractCommand(program);
 tagCommand(program);
 validateCommand(program);
 indexCommand(program);
+graphCommand(program);
 
 program.parse(process.argv);
 
