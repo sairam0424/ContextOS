@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContextOS | Visual Control Center</title>
+    <!-- Premium CDNs -->
+    <script src="https://unpkg.com/3d-force-graph"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --surface: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+            --primary: #00f2ff;
+            --secondary: #7000ff;
+            --text: #e0e0e0;
+            --text-dim: #999;
+            --accent: #ff0055;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden;
+        }
+
+        /* Glassmorphic UI Overlay */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+
+        .hud-card {
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            pointer-events: auto;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            transition: all 0.3s ease;
+        }
+
+        .hud-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        #brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        #brand h1 {
+            margin: 0;
+            font-size: 20px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        #health-ring {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 4px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        #health-value {
+            font-weight: bold;
+            font-size: 14px;
+            color: var(--primary);
+        }
+
+        /* Sidebar Stats */
+        #sidebar {
+            width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .stat-group {
+            margin-bottom: 12px;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tag-pill {
+            display: inline-block;
+            padding: 4px 8px;
+            background: rgba(112, 0, 255, 0.2);
+            border: 1px solid rgba(112, 0, 255, 0.4);
+            border-radius: 4px;
+            font-size: 11px;
+            margin-right: 4px;
+            margin-bottom: 4px;
+            color: #d8b4ff;
+        }
+
+        /* 3D Graph Container */
+        #graph-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Node Tooltip Styling */
+        .node-tooltip {
+            background: rgba(0,0,0,0.85);
+            border: 1px solid var(--primary);
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            line-height: 1.4;
+            max-width: 200px;
+        }
+
+        /* Bottom Status Bar */
+        footer {
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="graph-container"></div>
+
+    <div id="ui-layer">
+        <header>
+            <div class="hud-card" id="brand">
+                <i data-lucide="box"></i>
+                <div>
+                    <h1>ContextOS</h1>
+                    <div style="font-size: 10px; color: var(--text-dim);">Spatial Intelligence Layer</div>
+                </div>
+            </div>
+
+            <div class="hud-card" style="display: flex; align-items: center; gap: 16px;">
+                <div style="text-align: right;">
+                    <div class="stat-label">Workspace Health</div>
+                    <div style="font-size: 20px; font-weight: bold; color: var(--primary);" id="health-text">98%</div>
+                </div>
+                <div id="health-ring">
+                   <div id="health-value">--</div>
+                </div>
+            </div>
+        </header>
+
+        <main style="flex: 1; display: flex; align-items: flex-end;">
+            <div id="sidebar">
+                <div class="hud-card">
+                    <div class="stat-label"><i data-lucide="trending-up"></i> Trending Context</div>
+                    <div id="tag-container">
+                        <!-- Tags injected here -->
+                    </div>
+                </div>
+
+                <div class="hud-card">
+                    <div class="stat-label"><i data-lucide="activity"></i> Recent Activity</div>
+                    <div id="activity-list" style="font-size: 12px;">
+                        <!-- Activity injected here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div class="hud-card" style="display: flex; align-items: center; gap: 12px; padding: 6px 16px;">
+                <div class="pulse-dot"></div>
+                <span>LIVE TELEMETRY: CONNECTED</span>
+                <span style="opacity: 0.3;">|</span>
+                <span id="timestamp">SYNCING...</span>
+            </div>
+            
+            <div class="hud-card" style="padding: 6px 16px;">
+                SPATIAL ENGINE: V1.6.0
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Lucide Icons
+        lucide.createIcons();
+
+        let Graph;
+        
+        async function init() {
+            // Initial Graph setup
+            Graph = ForceGraph3D()(document.getElementById('graph-container'))
+                .backgroundColor('#0a0a0c')
+                .showNavInfo(false)
+                .nodeLabel(node => `<div class="node-tooltip"><b>${node.label}</b><br/><small style="opacity: 0.6">${node.id}</small></div>`)
+                .nodeAutoColorBy('type')
+                .linkDirectionalArrowLength(3.5)
+                .linkDirectionalArrowRelPos(1);
+
+            // Refine node appearance
+            Graph.nodeThreeObject(node => {
+                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ color: node.type === 'tag' ? '#7000ff' : '#00f2ff' }));
+                sprite.scale.set(node.type === 'tag' ? 8 : 12, node.type === 'tag' ? 8 : 12, 1);
+                return sprite;
+            });
+
+            await updateData();
+            setInterval(updateData, 5000); // 5s refresh
+        }
+
+        async function updateData() {
+            try {
+                const [graphRes, pulseRes] = await Promise.all([
+                    fetch('/api/graph').then(r => r.json()),
+                    fetch('/api/pulse').then(r => r.json())
+                ]);
+
+                // Update Graph
+                Graph.graphData(graphRes);
+
+                // Update Pulse HUD
+                document.getElementById('health-text').textContent = `${pulseRes.healthScore}%`;
+                document.getElementById('health-value').textContent = pulseRes.healthScore;
+                document.getElementById('timestamp').textContent = new Date(pulseRes.timestamp).toLocaleTimeString();
+
+                // Update Tags
+                const tagContainer = document.getElementById('tag-container');
+                tagContainer.innerHTML = pulseRes.topTags.map(tag => 
+                    `<span class="tag-pill">#${tag}</span>`
+                ).join('');
+
+                // Update Activity
+                const activityList = document.getElementById('activity-list');
+                activityList.innerHTML = pulseRes.recentChanges.map(change => 
+                    `<div style="margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.8;">
+                        <span style="color: var(--primary); margin-right: 6px;">•</span> ${change}
+                     </div>`
+                ).join('');
+
+            } catch (e) {
+                console.error("Dashboard Sync Failed:", e);
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

@@ -18,6 +18,7 @@ import { validateCommand } from "./commands/validate.js";
 import { indexCommand } from "./commands/index-cmd.js";
 import { graphCommand } from "./commands/graph.js";
 import { watchCommand } from "./commands/watch.js";
+import { dashboardCommand } from "./commands/dashboard.js";
 
 const program = new Command();
 
@@ -44,6 +45,7 @@ validateCommand(program);
 indexCommand(program);
 graphCommand(program);
 watchCommand(program);
+dashboardCommand(program);
 
 program.parse(process.argv);
 
