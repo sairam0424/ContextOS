@@ -80,6 +80,44 @@ export class DatabaseService {
         provider TEXT -- 'local' or 'gemini'
       );
     `);
+    
+    // 5. Edges Table (Persistent Graph)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS edges (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT,
+        target TEXT,
+        type TEXT,
+        weight REAL,
+        UNIQUE(source, target, type)
+      );
+    `);
+
+    // 6. Graph Metadata
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS graph_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
+    `);
+  }
+
+  public upsertEdge(source: string, target: string, type: string, weight: number) {
+    const stmt = this.db.prepare(`
+      INSERT INTO edges (source, target, type, weight)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(source, target, type) DO UPDATE SET weight = excluded.weight
+    `);
+    return stmt.run(source, target, type, weight);
+  }
+
+  public removeEdgesForSource(source: string) {
+    const stmt = this.db.prepare('DELETE FROM edges WHERE source = ?');
+    return stmt.run(source);
+  }
+
+  public getAllEdges() {
+    return this.db.prepare('SELECT * FROM edges').all() as any[];
   }
 
   public upsertDocument(record: DBRecord) {
