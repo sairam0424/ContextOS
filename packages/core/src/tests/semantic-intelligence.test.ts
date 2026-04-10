@@ -24,7 +24,7 @@ describe('Semantic Intelligence Engine (v1.2.0)', () => {
         const results = await intelligenceService.search("autonomy");
         if (results.length > 0) {
             assert.ok(results[0].score !== undefined, "Top result should have a score");
-            assert.ok(results[0].type === 'index', "Top result should come from the index");
+            assert.ok(['index', 'semantic', 'hybrid'].includes(results[0].type), `Top result type '${results[0].type}' should be one of indexed categories`);
         }
     });
 

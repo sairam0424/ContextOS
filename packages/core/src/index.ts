@@ -8,6 +8,9 @@ export * from './indexer.js';
 export * from './services/intelligence.js';
 export * from './services/validation.js';
 export * from './services/workspace.js';
+export * from './services/knowledge-graph.js';
+export * from './services/sampling.js';
+export * from './services/watch.js';
 
 /**
  * Validates that a path is within the workspace root and inside an allowed bucket.

@@ -105,24 +105,83 @@ export class ContextIndexer {
                     continue;
                 }
 
-                const record = await this.parseMarkdownFile(fullPath, stats.mtimeMs);
+                const record = await this.indexFile(fullPath, stats.mtimeMs);
                 if (record) {
                     records.push(record);
-                    // 3. SQLite Upsert + Semantic Generation
-                    const { id } = this.dbService.upsertDocument({
-                        path: record.path,
-                        title: record.title,
-                        content: record.content,
-                        excerpt: record.excerpt,
-                        mtime: record.lastModified,
-                        metadata: JSON.stringify(record.tags)
-                    });
-
-                    // Generate Vector for Semantic Layer
-                    const embedding = await this.embeddingService.generate(`${record.title}\n${record.excerpt}\n${record.content}`);
-                    this.dbService.upsertVector(id, embedding, await this.embeddingService.getProviderName());
                 }
             }
+        }
+    }
+
+    /**
+     * Public method to index or update a single file.
+     * Synchronizes both SQLite and the JSON index.
+     */
+    public async indexFile(filePath: string, mtimeMs?: number): Promise<IndexRecord | null> {
+        if (!mtimeMs) {
+            const stats = await fs.stat(filePath);
+            mtimeMs = stats.mtimeMs;
+        }
+
+        const record = await this.parseMarkdownFile(filePath, mtimeMs);
+        if (record) {
+            // 1. SQLite Upsert + Semantic Generation
+            const { id } = this.dbService.upsertDocument({
+                path: record.path,
+                title: record.title,
+                content: record.content,
+                excerpt: record.excerpt,
+                mtime: record.lastModified,
+                metadata: JSON.stringify(record.tags)
+            });
+
+            // Generate Vector for Semantic Layer
+            const embedding = await this.embeddingService.generate(`${record.title}\n${record.excerpt}\n${record.content}`);
+            this.dbService.upsertVector(id, embedding, await this.embeddingService.getProviderName());
+
+            // 2. Update JSON Index (if it exists)
+            await this.updateJsonIndex(record);
+        }
+        return record;
+    }
+
+    /**
+     * Public method to remove a file from all index layers.
+     */
+    public async removeFile(relativePath: string): Promise<void> {
+        // 1. SQLite Cleanup
+        this.dbService.removeDocument(relativePath);
+
+        // 2. JSON Cleanup
+        if (await fs.pathExists(this.indexPath)) {
+            try {
+                const index: ContextIndex = await fs.readJSON(this.indexPath);
+                index.records = index.records.filter(r => r.path !== relativePath);
+                index.lastUpdated = Date.now();
+                await fs.writeJSON(this.indexPath, index, { spaces: 2 });
+            } catch (e) {
+                // Ignore parsing errors
+            }
+        }
+    }
+
+    private async updateJsonIndex(record: IndexRecord) {
+        if (!(await fs.pathExists(this.indexPath))) return;
+
+        try {
+            const index: ContextIndex = await fs.readJSON(this.indexPath);
+            const existingIndex = index.records.findIndex(r => r.path === record.path);
+            
+            if (existingIndex >= 0) {
+                index.records[existingIndex] = record;
+            } else {
+                index.records.push(record);
+            }
+            
+            index.lastUpdated = Date.now();
+            await fs.writeJSON(this.indexPath, index, { spaces: 2 });
+        } catch (e) {
+            // If JSON is corrupt, it'll be fixed on next full reindex
         }
     }
 
