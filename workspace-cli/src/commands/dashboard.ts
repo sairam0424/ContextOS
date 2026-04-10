@@ -31,32 +31,53 @@ export function dashboardCommand(program: Command) {
           }
       }
 
+      const dashboardDist = path.resolve(process.cwd(), "workspace-dashboard/dist");
+      
       const server = http.createServer(async (req, res) => {
         const url = req.url || "/";
+
+        // CORS for development
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+
+        if (req.method === "OPTIONS") {
+          res.writeHead(204);
+          return res.end();
+        }
 
         // API endpoints
         if (url === "/api/pulse") {
           const pulse = await samplingService.getPulse();
-          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.writeHead(200, { "Content-Type": "application/json" });
           return res.end(JSON.stringify(pulse));
         }
 
         if (url === "/api/graph") {
           const graph = await knowledgeGraphService.getGraph();
-          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.writeHead(200, { "Content-Type": "application/json" });
           return res.end(JSON.stringify(graph));
         }
 
-        // Static Assets (Dashboard UI)
-        if (url === "/" || url === "/index.html") {
-          try {
-            const html = fs.readFileSync(templatePath, "utf8");
-            res.writeHead(200, { "Content-Type": "text/html" });
-            return res.end(html);
-          } catch (e) {
-            res.writeHead(500);
-            return res.end("Internal Server Error Loading Dashboard");
-          }
+        // Static Assets Serving
+        let filePath = path.join(dashboardDist, url === "/" ? "index.html" : url);
+        
+        // SPA Fallback: if file doesn't exist, serve index.html
+        if (!fs.existsSync(filePath)) {
+          filePath = path.join(dashboardDist, "index.html");
+        }
+
+        if (fs.existsSync(filePath)) {
+          const ext = path.extname(filePath);
+          const contentTypes: Record<string, string> = {
+            ".html": "text/html",
+            ".js": "text/javascript",
+            ".css": "text/css",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".svg": "image/svg+xml"
+          };
+          res.writeHead(200, { "Content-Type": contentTypes[ext] || "text/plain" });
+          return res.end(fs.readFileSync(filePath));
         }
 
         res.writeHead(404);
