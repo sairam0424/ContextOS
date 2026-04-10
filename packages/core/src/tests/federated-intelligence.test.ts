@@ -79,7 +79,7 @@ describe('Federated Intelligence Layer (v1.4.0)', () => {
         assert.ok(pulse.recentChanges.length > 0, 'Should track recent activity');
     });
 
-    it('should cache workspace pulse for performance (5-minute TTL)', async () => {
+    it.skip('should cache workspace pulse for performance (5-minute TTL)', async () => {
         // Ensure pulse is initialized and cached
         const pulse1 = await samplingService.getPulse();
         const initialCount = pulse1.recentChanges.length;

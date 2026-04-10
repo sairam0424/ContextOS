@@ -149,6 +149,11 @@ export class DatabaseService {
     return this.db.prepare('SELECT * FROM documents WHERE path = ?').get(filePath) as DBRecord | undefined;
   }
 
+  public removeDocument(filePath: string) {
+    const stmt = this.db.prepare('DELETE FROM documents WHERE path = ?');
+    return stmt.run(filePath);
+  }
+
   public getAllDocuments() {
     return this.db.prepare('SELECT * FROM documents').all() as DBRecord[];
   }

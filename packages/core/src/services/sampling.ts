@@ -72,6 +72,13 @@ export class SamplingService {
 
         return pulse;
     }
+
+    /**
+     * Public method to invalidate cache manually (used by WatchService)
+     */
+    public flushCache() {
+        this.cache = null;
+    }
 }
 
 export const samplingService = new SamplingService();
