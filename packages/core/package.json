@@ -26,6 +26,7 @@
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
     "better-sqlite3": "^12.8.0",
+    "chokidar": "^4.0.3",
     "front-matter": "^4.0.2",
     "fs-extra": "^11.2.0",
     "js-yaml": "^3.14.2",
