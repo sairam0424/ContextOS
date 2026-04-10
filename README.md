@@ -1,17 +1,45 @@
-# 🚀 ContextOS
+# 🌌 ContextOS: Aether Edition (v1.6.1)
 
-> **The Enterprise-Grade Intelligence Layer for Autonomous AI Agents.**
+> **The Spatial Intelligence Command Deck for Autonomous AI Agents.**
 
-ContextOS is a multi-layered infrastructure designed to bridge the gap between raw development activity and structured, actionable AI context. It provides a specialized set of tools (CLI & MCP) to help developers and AI agents maintain a project's "soul," long-term memory, and architectural integrity.
+ContextOS is a high-fidelity intelligence infrastructure designed to bridge the gap between raw development activity and structured, actionable AI context. It provides a specialized set of tools (CLI & MCP) to help developers and AI agents maintain a project's "soul," long-term memory, and architectural integrity.
 
 ---
 
-## 🏗️ Core Pillars
+## 🛠️ Troubleshooting: The `EPERM` Blockade
 
-*   **Intelligence Layer**: Automated memory lifecycle (Hot → Warm → Cold) and context compression.
-*   **Validation Layer**: Structural enforcement through JSON schemas for mission-critical context files.
-*   **Safety Layer**: "Allowed-Bucket" isolation strategy to prevent security violations and directory traversal.
-*   **Interface Layer**: Universal Model Context Protocol (MCP) server for seamless IDE integration (Cursor, Claude Code, Antigravity).
+If you encounter `npm error code EPERM` or `Operation not permitted` during publication, it is likely due to root-owned files in your NPM cache on macOS.
+
+### The Symptom
+
+```text
+npm error syscall mkdir
+npm error path /Users/sairamugge/.npm/_cacache/tmp
+npm error errno EPERM
+```
+
+### 1. Synchronize Versioning
+
+Before publishing, you must bump the version in **all 4 manifests**.
+
+> [!IMPORTANT]
+> ContextOS maintains strict version parity. If the project moves to `1.6.2`, all packages must be `1.6.2`.
+
+**Files to update:**
+
+- `package.json` (Root)
+- `packages/core/package.json`
+- `workspace-cli/package.json` (Also update `@context-os/core` dependency version)
+- `workspace-mcp/package.json` (Also update `@context-os/core` dependency version)
+
+---
+
+## 🕹️ The Aether Command Deck
+The v1.6.1 release introduces the **Aether HUD**, a real-time visual control center for your workspace.
+
+*   **3D Knowledge Graph**: Visualize the relationships between your project's "Soul," memory, and active decisions in a spatial force-directed graph.
+*   **The Sentinel (Watch Service)**: Full-auto background indexing that ensures your AI agents always have the freshest architectural intelligence.
+*   **Hybrid Semantic Mesh**: Combines high-speed relational grep with deep semantic extraction for unified context resolution.
 
 ---
 
@@ -23,12 +51,18 @@ To use ContextOS in your terminal anywhere:
 npm install -g @context-os/cli
 ```
 
-### 2. Initialize a Project
+### 2. Enter the Dash (HUD)
+Launch the spatial dashboard to visualize your workspace health:
 ```bash
-workspace init my-cool-project
+context-os dashboard
 ```
 
-### 3. Connect your AI Agent (MCP)
+### 3. Initialize a Project
+```bash
+context-os init my-cool-project
+```
+
+### 4. Connect your AI Agent (MCP)
 In Cursor, Claude Desktop, or VS Code settings, add the following command:
 ```bash
 npx -y @context-os/mcp@latest
@@ -39,24 +73,24 @@ npx -y @context-os/mcp@latest
 
 ## 🛠️ Capability Matrix
 
-| Feature | CLI (`workspace`) | MCP (AI Agents) |
+| Feature | CLI (`context-os`) | MCP (AI Agents) |
 | :--- | :---: | :---: |
+| **Aether Dashboard (HUD)** | ✅ | ❌ |
+| **Real-time Sentinel (Watch)** | ✅ | ❌ |
 | Project Scaffolding | ✅ | ❌ |
 | Daily Logging | ✅ | ✅ |
 | ADR Tracking (Decisions) | ✅ | ✅ |
 | Workspace Validation | ✅ | ❌ |
 | Global Search | ✅ | ✅ |
 | Memory Pruning | ✅ | ❌ |
-| Structural Context Reads | ❌ | ✅ |
-| Autonomous Writing | ❌ | ✅ |
 
 ---
 
 ## 📖 Documentation
-- [**User Guide**](./USER_GUIDE.md): Getting started, daily workflows, and IDE setup.
+- [**User Guide**](./USER_GUIDE.md): Getting started, daily workflows, and Aether setup.
+- [**Leveling Up**](./docs/cli.md): Full command breakdown.
 - [**Architecture Deep Dive**](./docs/architecture.md): System layers, security, and data flow.
-- [**CLI Reference**](./docs/cli.md): Full command breakdown.
-- [**MCP Reference**](./docs/mcp.md): Available tools and schemas.
+- [**Publishing Guide**](./docs/publishing.md): Build and distribution protocol.
 
 ---
 
