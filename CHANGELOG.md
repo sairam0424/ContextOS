@@ -28,3 +28,15 @@ All notable changes to the ContextOS platform will be documented in this file.
 ### Added
 - **Initial Stability Release**: Unified domain handlers and enterprise-grade validation suites.
 - **MCP Protocol V1**: Standardized tool registration for AI agent compatibility.
+
+## [1.0.0] - 2026-04-07
+### Added
+- **Initial Stability Release**: Unified domain handlers and enterprise-grade validation suites.
+- **MCP Protocol V1**: Standardized tool registration for AI agent compatibility.
+
+# 1. Publish the Developer Interface (CLI)
+npm publish -w workspace-cli --access public
+
+# 2. Publish the Model Context Protocol Server
+npm publish -w workspace-mcp --access public
+
