@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'fs-extra';
 import { workspaceRoot, ALLOWED_BUCKETS } from './context.js';
 import { validationService } from './services/validation.js';
-import { DatabaseService } from './services/database.js';
+import { DatabaseService, DBRecord } from './services/database.js';
 import { EmbeddingService } from './services/embedding.js';
 
 export interface IndexRecord {
@@ -16,21 +16,11 @@ export interface IndexRecord {
     mentions: string[];
 }
 
-export interface ContextIndex {
-    version: string;
-    lastUpdated: number;
-    records: IndexRecord[];
-    provider?: string; // Metadata for which embedding provider was used
-}
-
 export class ContextIndexer {
-    private indexPath: string;
-    private previousIndex: ContextIndex | null = null;
     private dbService: DatabaseService;
     private embeddingService: EmbeddingService;
 
     constructor() {
-        this.indexPath = path.join(workspaceRoot, '.context-index.json');
         this.dbService = new DatabaseService(workspaceRoot);
         // Load API key if present for Elite mode
         const geminiKey = process.env.GEMINI_API_KEY;
@@ -41,74 +31,48 @@ export class ContextIndexer {
      * Recursively indexes the workspace metadata.
      * Implements Incremental logic: only parses files changed since last index.
      */
-    async reindex(options: { force?: boolean } = {}): Promise<ContextIndex> {
-        // 1. Load previous index for incremental comparison
-        if (!options.force && await fs.pathExists(this.indexPath)) {
-            try {
-                this.previousIndex = await fs.readJSON(this.indexPath);
-                // Upgrade from v1.2.x to v1.3.0 forces a semantic re-index
-                if (this.previousIndex && this.previousIndex.version !== '1.3.0') {
-                    this.previousIndex = null;
-                }
-            } catch (e) {
-                this.previousIndex = null;
-            }
-        }
-
-        const index: ContextIndex = {
-            version: '1.3.0',
-            lastUpdated: Date.now(),
-            records: [],
-            provider: await this.embeddingService.getProviderName()
-        };
-
-        const existingRecordMap = new Map<string, IndexRecord>();
-        if (this.previousIndex) {
-            this.previousIndex.records.forEach(r => existingRecordMap.set(r.path, r));
-        }
+    async reindex(options: { force?: boolean } = {}): Promise<{ records: IndexRecord[] }> {
+        const existingDocuments = this.dbService.getAllDocuments();
+        const existingRecordMap = new Map<string, DBRecord>();
+        existingDocuments.forEach(doc => existingRecordMap.set(doc.path, doc));
 
         // 2. Scan buckets incrementally
         for (const bucket of ALLOWED_BUCKETS) {
             const bucketPath = path.join(workspaceRoot, bucket);
             if (await fs.pathExists(bucketPath)) {
-                await this.scanDirectory(bucketPath, index.records, existingRecordMap);
+                await this.scanDirectory(bucketPath, existingRecordMap);
             }
         }
 
-        // 3. Atomic persistence
-        const tempPath = `${this.indexPath}.tmp`;
-        await fs.writeJSON(tempPath, index, { spaces: 2 });
-        await fs.move(tempPath, this.indexPath, { overwrite: true });
-
-        return index;
+        return { records: await this.search("") };
     }
 
-    private async scanDirectory(dir: string, records: IndexRecord[], existingRecordMap: Map<string, IndexRecord>) {
+    private async scanDirectory(dir: string, existingRecordMap: Map<string, DBRecord>) {
         const entries = await fs.readdir(dir, { withFileTypes: true });
 
         for (const entry of entries) {
             const fullPath = path.join(dir, entry.name);
             
             if (entry.isDirectory()) {
-                await this.scanDirectory(fullPath, records, existingRecordMap);
+                await this.scanDirectory(fullPath, existingRecordMap);
                 continue;
             }
 
-            if (entry.name.endsWith('.md')) {
-                const relativePath = path.relative(workspaceRoot, fullPath);
-                const stats = await fs.stat(fullPath);
-                const existing = existingRecordMap.get(relativePath);
+            const relativePath = path.relative(workspaceRoot, fullPath);
+            const stats = await fs.stat(fullPath);
+            const existing = existingRecordMap.get(relativePath);
 
-                // Incremental Check: Skip parsing if mtime matches
-                if (existing && existing.lastModified === stats.mtimeMs) {
-                    records.push(existing);
+            if (entry.name.endsWith('.md')) {
+                if (existing && existing.mtime === stats.mtimeMs) {
                     continue;
                 }
 
-                const record = await this.indexFile(fullPath, stats.mtimeMs);
-                if (record) {
-                    records.push(record);
+                await this.indexFile(fullPath, stats.mtimeMs);
+            } else if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx') || entry.name.endsWith('.py')) {
+                if (existing && existing.mtime === stats.mtimeMs) {
+                    continue;
                 }
+                await this.indexCodeFile(fullPath, stats.mtimeMs);
             }
         }
     }
@@ -132,12 +96,9 @@ export class ContextIndexer {
                 content: record.content,
                 excerpt: record.excerpt,
                 mtime: record.lastModified,
-                metadata: JSON.stringify(record.tags)
+                metadata: JSON.stringify(record.tags),
+                intelligence_status: 'pending'
             });
-
-            // Generate Vector for Semantic Layer
-            const embedding = await this.embeddingService.generate(`${record.title}\n${record.excerpt}\n${record.content}`);
-            this.dbService.upsertVector(id, embedding, await this.embeddingService.getProviderName());
 
             // 1b. Graph Edge Extraction (Incremental)
             this.dbService.removeEdgesForSource(record.path);
@@ -147,64 +108,78 @@ export class ContextIndexer {
                 this.dbService.upsertEdge(record.path, `tag:${tag}`, 'tag', 1.0);
             });
 
-            // Explicit Links: Mentions
-            record.mentions.forEach(mention => {
+            // Explicit Links: Mentions (with Symbol Resolution)
+            for (const mention of record.mentions) {
                 this.dbService.upsertEdge(record.path, mention, 'mention', 1.0);
-            });
-
-            // Implicit Links: Semantic Bridges (Similarity > 0.85)
-            const matches = this.dbService.searchSemantic(embedding, 10);
-            matches.forEach(match => {
-                if (match.path !== record.path && (1 - match.distance) > 0.85) {
-                    this.dbService.upsertEdge(record.path, match.path, 'semantic', 1 - match.distance);
+                
+                // Source-Doc Interop: Link to implementation if symbol exists
+                const symbol = this.dbService.getSymbolByName(mention);
+                if (symbol) {
+                    this.dbService.upsertEdge(record.path, `symbol:${symbol.name}`, 'code-ref', 1.0);
                 }
-            });
+            }
 
-            // 2. Update JSON Index (if it exists)
-            await this.updateJsonIndex(record);
+            // Phase 2: Intelligence Queue
+            this.dbService.addToQueue(id);
         }
         return record;
+    }
+
+    /**
+     * Extracts exported symbols from source code files.
+     */
+    public async indexCodeFile(filePath: string, mtimeMs?: number): Promise<void> {
+        if (!mtimeMs) {
+            const stats = await fs.stat(filePath);
+            mtimeMs = stats.mtimeMs;
+        }
+
+        const relativePath = path.relative(workspaceRoot, filePath);
+        
+        // Cleanup old symbols for this file
+        this.dbService.removeSymbolsForPath(relativePath);
+
+        const content = await fs.readFile(filePath, 'utf8');
+        const lines = content.split('\n');
+        
+        if (filePath.endsWith('.ts') || filePath.endsWith('.tsx')) {
+            const tsRegex = /export\s+(function|class|const|async\s+function|interface|type)\s+([a-zA-Z0-9_]+)/g;
+            let match;
+            while ((match = tsRegex.exec(content)) !== null) {
+                const name = match[2];
+                const type = match[1];
+                const offset = match.index;
+                const lineNo = content.slice(0, offset).split('\n').length;
+                const signature = lines[lineNo - 1].trim();
+                
+                this.dbService.upsertSymbol(name, relativePath, lineNo, type, signature);
+                // Also add a graph node for the symbol
+                this.dbService.upsertEdge(relativePath, `symbol:${name}`, 'contains', 0.5);
+            }
+        } else if (filePath.endsWith('.py')) {
+            const pyRegex = /^(def|class)\s+([a-zA-Z0-9_]+)/gm;
+            let match;
+            while ((match = pyRegex.exec(content)) !== null) {
+                const name = match[2];
+                const type = match[1];
+                const offset = match.index;
+                const lineNo = content.slice(0, offset).split('\n').length;
+                const signature = lines[lineNo - 1].trim();
+                
+                this.dbService.upsertSymbol(name, relativePath, lineNo, type, signature);
+                this.dbService.upsertEdge(relativePath, `symbol:${name}`, 'contains', 0.5);
+            }
+        }
     }
 
     /**
      * Public method to remove a file from all index layers.
      */
     public async removeFile(relativePath: string): Promise<void> {
-        // 1. SQLite Cleanup
+        // SQLite Cleanup
         this.dbService.removeDocument(relativePath);
-
-        // 2. JSON Cleanup
-        if (await fs.pathExists(this.indexPath)) {
-            try {
-                const index: ContextIndex = await fs.readJSON(this.indexPath);
-                index.records = index.records.filter(r => r.path !== relativePath);
-                index.lastUpdated = Date.now();
-                await fs.writeJSON(this.indexPath, index, { spaces: 2 });
-            } catch (e) {
-                // Ignore parsing errors
-            }
-        }
     }
 
-    private async updateJsonIndex(record: IndexRecord) {
-        if (!(await fs.pathExists(this.indexPath))) return;
-
-        try {
-            const index: ContextIndex = await fs.readJSON(this.indexPath);
-            const existingIndex = index.records.findIndex(r => r.path === record.path);
-            
-            if (existingIndex >= 0) {
-                index.records[existingIndex] = record;
-            } else {
-                index.records.push(record);
-            }
-            
-            index.lastUpdated = Date.now();
-            await fs.writeJSON(this.indexPath, index, { spaces: 2 });
-        } catch (e) {
-            // If JSON is corrupt, it'll be fixed on next full reindex
-        }
-    }
 
     private async parseMarkdownFile(filePath: string, mtimeMs: number): Promise<IndexRecord | null> {
         try {
@@ -253,22 +228,21 @@ export class ContextIndexer {
     }
 
     /**
-     * Searches the local index.
+     * Searches the local index using SQLite FTS5.
      */
     async search(query: string): Promise<IndexRecord[]> {
-        if (!(await fs.pathExists(this.indexPath))) {
-            return [];
-        }
-
-        const index: ContextIndex = await fs.readJSON(this.indexPath);
-        const lowerQuery = query.toLowerCase();
-
-        return index.records.filter(record => 
-            record.title.toLowerCase().includes(lowerQuery) ||
-            record.tags.some(t => t.toLowerCase().includes(lowerQuery)) ||
-            record.excerpt.toLowerCase().includes(lowerQuery) ||
-            record.path.toLowerCase().includes(lowerQuery)
-        );
+        const records = this.dbService.searchHybrid(new Float32Array(0), query, 20);
+        // Map hybrid results back to IndexRecord
+        return records.keywordResults.map((r: any) => ({
+            path: r.path,
+            title: r.title,
+            excerpt: r.excerpt,
+            tags: JSON.parse(r.metadata || '[]'),
+            status: r.status || 'active',
+            lastModified: r.mtime,
+            content: r.content,
+            mentions: [] // Not stored in main column yet
+        }));
     }
 }
 

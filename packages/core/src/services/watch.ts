@@ -1,10 +1,11 @@
 import path from 'node:path';
+import { EventEmitter } from 'node:events';
 import chokidar, { FSWatcher } from 'chokidar';
 import { workspaceRoot, ALLOWED_BUCKETS } from '../context.js';
 import { globalIndexer } from '../indexer.js';
 import { samplingService } from './sampling.js';
 
-export class WatchService {
+export class WatchService extends EventEmitter {
     private watcher: FSWatcher | null = null;
 
     /**
@@ -46,13 +47,20 @@ export class WatchService {
     }
 
     private async handleEvent(filePath: string) {
-        if (!filePath.endsWith('.md')) return;
+        const ext = path.extname(filePath);
+        if (!['.md', '.ts', '.tsx', '.py'].includes(ext)) return;
+        
         const relativePath = path.relative(workspaceRoot, filePath);
         
         try {
             console.log(`📝 Change detected: ${relativePath}`);
-            await globalIndexer.indexFile(filePath);
+            if (ext === '.md') {
+                await globalIndexer.indexFile(filePath);
+            } else {
+                await globalIndexer.indexCodeFile(filePath);
+            }
             samplingService.flushCache();
+            this.emit('sync', { type: 'update', path: relativePath });
         } catch (error) {
             console.error(`❌ Watch error for ${relativePath}:`, error);
         }
@@ -64,6 +72,7 @@ export class WatchService {
             console.log(`🗑️ Deletion detected: ${relativePath}`);
             await globalIndexer.removeFile(relativePath);
             samplingService.flushCache();
+            this.emit('sync', { type: 'delete', path: relativePath });
         } catch (error) {
             console.error(`❌ Deletion error for ${relativePath}:`, error);
         }

@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import { watchService, globalIndexer, samplingService } from "@context-os/core";
+import { watchService, globalIndexer, samplingService, intelligenceQueue } from "@context-os/core";
 
 export function watchCommand(program: Command) {
   program
@@ -18,8 +18,9 @@ export function watchCommand(program: Command) {
         await globalIndexer.reindex();
         spinner.succeed("Initial sweep complete. Workspace is synchronized.");
 
-        // 2. Start Watch Service
+        // 2. Start Watch Service & Intelligence Queue
         watchService.start();
+        intelligenceQueue.start();
 
         const pulse = await samplingService.getPulse();
         console.log(chalk.green(`\n✅ Intelligence Layer Active`));
@@ -33,6 +34,7 @@ export function watchCommand(program: Command) {
         process.on("SIGINT", () => {
           statusSpinner.stop();
           watchService.stop();
+          intelligenceQueue.stop();
           console.log(chalk.yellow("\n👋 Watch service stopped. Workspace remains indexed."));
           process.exit(0);
         });

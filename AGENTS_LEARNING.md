@@ -176,3 +176,38 @@ Treat this file as the primary handoff mechanism. If a task is interrupted, the 
 - **Mitigation**: Switched to a registration-stability pattern (using assert.doesNotThrow) to verify tool integration without relying on SDK internals.
 - **Mistake**: Passing a path string instead of file content to extractMetadata during tests.
 - **Mitigation**: Ensured all tests readFile before calling core extraction services.
+
+---
+
+## Session Notes — 2026-04-11 (Streaming & Deep Context Upgrade)
+
+### New Insights
+
+- **Spatial Telemetry & Trust**: Visualizing the "Agent Focus" (the AI's active attention) in the 3D HUD creates a "Glass Box" effect. Users feel less anxiety about autonomous agents when they can physically see the agent "moving" through the graph.
+- **Top-K vs. Hard-Thresholds**: Flat similarity thresholds (e.g. >0.85) fail in heterogeneous workspaces. Switching to a "Top-3 Neighbors" pruning strategy (v1.9.0) ensures that every node has logical context bridges without devolving into a "hairball" graph.
+- **Bidirectional HUD Patterns**: Moving from a passive dashboard to an active Command Center requires a bidirectional WebSocket protocol. The "Send Command -> Execute in Core -> Broadcast Sync" loop ensures all connected clients remain in a consistent state.
+- **Unified Persistence Layer**: Replacing the JSON-based synchronization with a SQLite-only Source of Truth (SOT) significantly reduces I/O overhead and avoids the "Dual-Write" problem that caused race conditions in v1.7.0.
+- **Background Intelligence Queue**: De-coupling embedding generation from the main watcher thread (Sentinel) ensures the CLI remains interactive even during bulk indexing operations.
+- **FTS5 vs Semantic Hybrid Search**: Using SQLite FTS5 for keyword matching while leveraging `sqlite-vec` for semantic distance provides a production-grade search architecture that out-performs simple property filtering.
+- **Spatial Intelligence**: Transitioning from a list-based view to a 3D Knowledge Graph (Aether HUD) significantly improves the ability of agents to detect context silos and orphaned files.
+- **The Sentinel Pattern**: Transitioning from manual indexing to a background `watch` service (Sentinel) prevents "Stale Intelligence" where an agent reads an ADR that was just overwritten.
+- **Dependency Version Pinning**: In a monorepo, version drifts (e.g., CLI at 1.5.0 but Core at 1.6.1) cause silent failures in domain logic. Fixed via Turbo-sync and manual manifest audit.
+
+### Decisions
+
+- **Aether Command Center (v1.9.0)**: Standardized on a Command-Action pattern for HUD-to-CLI communication. Manual links are persisted with `type: 'manual'` to differentiate from AI-generated bridges.
+- **Intelligence Backbone (v1.8.0)**: Adopted a background worker pattern for all semantic processing. Documents are indexed as "Metadata Ready" first, then "Semantic Ready" once processed.
+- **Aether Visual Dashboard**: Adopted `3d-force-graph` with Glassmorphism aesthetic for the primary control interface.
+- **Unified Binary Name**: Standardized on `context-os` as the global binary name for better branding and recognition.
+- **NPM Distribution Strategy**: Implemented sequential publication (Core -> CLI -> MCP) with `sudo chown` as the documented fix for Mac permission blockers.
+- **Exported Symbols Only**: To avoid noise, we only index exported code symbols. This focuses the graph on the "Public API" of the workspace.
+- **Socket-Based "Pulse"**: Standardized all HUD updates on a single WebSocket channel for `init` and `sync` events, reducing HTTP request overhead.
+
+### Mistakes & Mitigations
+
+- **Mistake**: Attempted to use standard CSS `linkDashArray` for 3D links, which is not supported by the underlying Three.js LineBasicMaterial.
+- **Mitigation**: Switched to **Color-encoded links** and increased `linkWidth` for code references to achieve visual differentiation.
+- **Mistake**: Encountered multiple `TS18048` errors in the React HUD because the WebSocket can deliver partial updates or "entities" that lack document-specific metadata.
+- **Mitigation**: Enforced rigorous **optional chaining** (`?.`) across the entire Dashboard UI layer.
+- **Mistake**: Permission `EPERM` issues during build in the restricted environment.
+- **Mitigation**: Used local caches (`--cache ./npm_cache`) and verified `node` paths before running build scripts.

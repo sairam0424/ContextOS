@@ -34,5 +34,8 @@ export const ALLOWED_BUCKETS = [
   "orgs",
   "root",
   "docs",
-  "prompts"
+  "prompts",
+  "packages",
+  "workspace-cli",
+  "workspace-dashboard"
 ];

@@ -1,31 +1,54 @@
 import { useState, useEffect } from 'react';
-import { BrainCircuit, Zap, Radio, Info, X, Copy, MousePointer2 } from 'lucide-react';
+import { BrainCircuit, Zap, Radio, Info, X, Copy, MousePointer2, Wifi, WifiOff } from 'lucide-react';
 import AetherGraph from './components/AetherGraph';
-import type { PulseData, NodeData } from './types.ts';
+import type { PulseData, NodeData, GraphData } from './types.ts';
 
 function App() {
   const [pulse, setPulse] = useState<PulseData | null>(null);
+  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
-  const [ticker, setTicker] = useState("INITIALIZING AETHER CORE... READY.");
+  const [ticker, setTicker] = useState("AETHER CORE: OFFLINE. STANDBY.");
+  const [isConnected, setIsConnected] = useState(false);
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const pulseRes = await fetch('http://localhost:3010/api/pulse');
-        const data = await pulseRes.json();
-        setPulse(data);
-        
-        if (data.recentChanges?.length > 0) {
-          setTicker(`PULSE DETECTED: SYNCING [${data.recentChanges[0]}]`);
-        }
-      } catch (err) {
-        console.error("Pulse fetch failed", err);
-      }
+    const socket = new WebSocket(`ws://${window.location.host}`);
+
+    socket.onopen = () => {
+      setIsConnected(true);
+      setTicker("AETHER CORE: LINK ESTABLISHED. MONITORING PULSE.");
     };
 
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      
+      if (message.type === 'init' || message.type === 'sync') {
+        setPulse(message.data.pulse);
+        setGraphData(message.data.graph);
+        
+        if (message.event && message.type === 'sync') {
+          setTicker(`SIGNAL DETECTED: [${message.event.type.toUpperCase()}] ${message.event.path}`);
+        }
+      }
+
+      if (message.type === 'agent_focus') {
+        setFocusedNodeId(message.id);
+        const node = graphData.nodes.find(n => n.id === message.id);
+        if (node) {
+          setTicker(`AGENT FOCUS: INVESTIGATING [${node.label}]`);
+        }
+      }
+    };
+    
+    setSocket(socket);
+
+    socket.onclose = () => {
+      setIsConnected(false);
+      setTicker("AETHER CORE: LINK SEVERED. ATTEMPTING RECONNECT...");
+    };
+
+    return () => socket.close();
   }, []);
 
   const copyPath = (path: string) => {
@@ -38,7 +61,11 @@ function App() {
     <div className="relative w-screen h-screen overflow-hidden">
       {/* 3D Graph Layer */}
       <div className="absolute inset-0 z-0">
-        <AetherGraph onNodeClick={setSelectedNode} />
+        <AetherGraph 
+          onNodeClick={setSelectedNode} 
+          graphData={graphData} 
+          focusedNodeId={focusedNodeId}
+        />
       </div>
 
       {/* UI Overlay */}
@@ -58,6 +85,9 @@ function App() {
           </div>
 
           <div className="glass p-5 pointer-events-auto flex items-center gap-5">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isConnected ? 'bg-primary/20 text-primary' : 'bg-red-500/20 text-red-500'}`}>
+              {isConnected ? <Wifi size={16} /> : <WifiOff size={16} />}
+            </div>
             <div className="text-right">
               <div className="font-display text-[11px] uppercase text-primary tracking-[2px] opacity-80">
                 Workspace Stability
@@ -65,9 +95,6 @@ function App() {
               <div className="text-lg font-bold text-primary font-display">
                 {pulse?.healthScore ?? '--'}%
               </div>
-            </div>
-            <div className="w-10 h-10 rounded-full border-2 border-primary flex items-center justify-center text-xs text-primary animate-pulse">
-              {pulse?.healthScore ?? '--'}
             </div>
           </div>
         </header>
@@ -100,6 +127,35 @@ function App() {
               ))}
             </div>
           </div>
+
+          {/* Intelligence Backbone Status */}
+          <div className="glass p-5 pointer-events-auto">
+            <div className="font-display text-[11px] uppercase text-primary tracking-[2px] mb-4 flex items-center gap-2">
+              <BrainCircuit size={14} /> Intelligence Backbone
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center p-2 bg-white/5 rounded">
+                <div className="text-[10px] text-text-dim uppercase mb-1">Queue</div>
+                <div className="text-sm font-bold text-white">{pulse?.intelligenceStatus.pending ?? 0}</div>
+              </div>
+              <div className="text-center p-2 bg-primary/10 rounded ring-1 ring-primary/30">
+                <div className="text-[10px] text-primary uppercase mb-1">Active</div>
+                <div className="text-sm font-bold text-primary animate-pulse">{pulse?.intelligenceStatus.processing ?? 0}</div>
+              </div>
+              <div className="text-center p-2 bg-secondary/10 rounded">
+                <div className="text-[10px] text-secondary uppercase mb-1">Ready</div>
+                <div className="text-sm font-bold text-secondary">{pulse?.intelligenceStatus.ready ?? 0}</div>
+              </div>
+            </div>
+            <div className="mt-4 h-1 bg-white/5 rounded-full overflow-hidden">
+               <div 
+                 className="h-full bg-primary transition-all duration-1000" 
+                 style={{ 
+                   width: `${pulse ? (pulse.intelligenceStatus.ready / (pulse.intelligenceStatus.ready + pulse.intelligenceStatus.pending + pulse.intelligenceStatus.processing || 1)) * 100 : 0}%` 
+                 }} 
+               />
+            </div>
+          </div>
         </aside>
 
         {/* Inspector */}
@@ -123,24 +179,78 @@ function App() {
                <div className="flex flex-col gap-2">
                   <div className="font-display text-[9px] uppercase text-primary tracking-[2px] opacity-60">Intelligence Metadata</div>
                   <div className="glass bg-black/20 p-3 text-[12px] leading-relaxed">
-                    {selectedNode.metadata?.excerpt || 'Scanning for latent semantic patterns...'}
+                    {selectedNode.metadata?.excerpt && (
+                      <p className="text-secondary/70 leading-relaxed italic mb-4">
+                        "{selectedNode.metadata.excerpt}"
+                      </p>
+                    )}
+
+                    {selectedNode.type === 'symbol' && (
+                      <div className="space-y-4">
+                        <div className="p-3 bg-white/5 rounded border border-white/10">
+                          <div className="text-[10px] uppercase tracking-wider text-secondary/50 mb-1">Signature</div>
+                          <code className="text-xs text-secondary/90 break-all">{selectedNode.metadata?.signature}</code>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-secondary/60">
+                          <span className="px-2 py-0.5 bg-primary/20 text-primary rounded ring-1 ring-primary/30 uppercase text-[9px]">
+                            {selectedNode.metadata?.symbolType}
+                          </span>
+                          <span>L{selectedNode.metadata?.line} in {selectedNode.metadata?.path?.split('/').pop()}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                </div>
 
-               <div>
+                <div>
                   <div className="font-display text-[9px] uppercase text-primary tracking-[2px] opacity-60 mb-3">Entity Classification</div>
                   <div className="flex gap-2">
                     <span className="px-3 py-1 border border-primary text-primary text-[10px] rounded-full">Type: {selectedNode.type}</span>
-                    <span className="px-3 py-1 border border-white/20 text-white/50 text-[10px] rounded-full">Access: Federated</span>
+                    <span className={`px-3 py-1 border text-[10px] rounded-full ${
+                      selectedNode.metadata?.intelligenceStatus === 'ready' 
+                        ? 'border-secondary text-secondary' 
+                        : selectedNode.metadata?.intelligenceStatus === 'processing'
+                        ? 'border-primary text-primary animate-pulse'
+                        : 'border-white/20 text-white/50'
+                    }`}>
+                      Backbone: {selectedNode.metadata?.intelligenceStatus || 'pending'}
+                    </span>
                   </div>
                </div>
 
-               <button 
-                onClick={() => copyPath(selectedNode.id)}
-                className="glass w-full p-3 text-[11px] uppercase flex items-center justify-center gap-2 hover:bg-white/5 transition-colors"
-               >
-                 <Copy size={12} /> Copy Path
-               </button>
+               <div className="grid grid-cols-2 gap-2 mt-2">
+                 <button 
+                  onClick={() => copyPath(selectedNode.id)}
+                  className="glass p-3 text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-white/5 transition-colors border-none"
+                 >
+                   <Copy size={12} /> Copy
+                 </button>
+                 <button 
+                  onClick={() => {
+                    socket?.send(JSON.stringify({ type: 'action', action: 'pulse_node', payload: { id: selectedNode.id } }));
+                    setTicker(`AETHER ACTION: TRIGGERING FORCE PULSE [${selectedNode.label}]`);
+                  }}
+                  className="glass p-3 text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-primary/10 transition-colors border-none text-primary"
+                 >
+                   <Zap size={12} /> Pulse
+                 </button>
+               </div>
+
+               {selectedNode.type === 'document' && (
+                 <div className="mt-4">
+                    <div className="font-display text-[9px] uppercase text-primary tracking-[2px] opacity-60 mb-3">Aether Actions</div>
+                    <button 
+                      className="w-full text-[10px] p-4 glass bg-primary/5 hover:bg-primary/10 text-primary border-primary/20 flex items-center justify-between group transition-all"
+                      onClick={() => {
+                        // In a real app we'd open a dialog to select another node
+                        setTicker("SYSTEM: SELECT TARGET NODE TO BRIDGE...");
+                      }}
+                    >
+                      <span className="font-display tracking-[1px]">ESTABLISH MANUAL BRIDGE</span>
+                      <BrainCircuit size={14} className="group-hover:rotate-12 transition-transform" />
+                    </button>
+                 </div>
+               )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-10 opacity-40 italic">
@@ -163,7 +273,7 @@ function App() {
           </div>
 
           <div className="glass py-2 px-4 pointer-events-auto font-display text-[10px] tracking-[1px]">
-            DECK: <span className="text-primary">V1.7.0-AETHER-ADVANCED</span>
+            DECK: <span className="text-primary">V1.9.0-AETHER-CMD-CENTER</span>
           </div>
         </footer>
       </div>
