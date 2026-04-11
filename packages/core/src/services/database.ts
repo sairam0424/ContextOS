@@ -11,6 +11,7 @@ export interface DBRecord {
   excerpt: string;
   mtime: number;
   metadata: string; // JSON string
+  intelligence_status?: string;
 }
 
 export class DatabaseService {
@@ -40,7 +41,9 @@ export class DatabaseService {
         content TEXT,
         excerpt TEXT,
         mtime INTEGER,
-        metadata TEXT
+        metadata TEXT,
+        status TEXT DEFAULT 'active',
+        intelligence_status TEXT DEFAULT 'pending'
       );
     `);
 
@@ -100,6 +103,29 @@ export class DatabaseService {
         value TEXT
       );
     `);
+
+    // 7. Symbols Table (Source Code)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS symbols (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        path TEXT,
+        line INTEGER,
+        type TEXT,
+        signature TEXT,
+        UNIQUE(name, path)
+      );
+    `);
+
+    // 8. Intelligence Queue
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS intelligence_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        doc_id INTEGER UNIQUE REFERENCES documents(id) ON DELETE CASCADE,
+        priority INTEGER DEFAULT 1,
+        created_at INTEGER
+      );
+    `);
   }
 
   public upsertEdge(source: string, target: string, type: string, weight: number) {
@@ -116,24 +142,40 @@ export class DatabaseService {
     return stmt.run(source);
   }
 
+  public removeEdgesForSourceByType(source: string, type: string) {
+    const stmt = this.db.prepare('DELETE FROM edges WHERE source = ? AND type = ?');
+    return stmt.run(source, type);
+  }
+
+  public removeEdge(source: string, target: string, type: string) {
+    const stmt = this.db.prepare('DELETE FROM edges WHERE source = ? AND target = ? AND type = ?');
+    return stmt.run(source, target, type);
+  }
+
   public getAllEdges() {
     return this.db.prepare('SELECT * FROM edges').all() as any[];
   }
 
-  public upsertDocument(record: DBRecord) {
+  public upsertDocument(record: DBRecord & { status?: string, intelligence_status?: string }) {
     const stmt = this.db.prepare(`
-      INSERT INTO documents (path, title, content, excerpt, mtime, metadata)
-      VALUES (@path, @title, @content, @excerpt, @mtime, @metadata)
+      INSERT INTO documents (path, title, content, excerpt, mtime, metadata, status, intelligence_status)
+      VALUES (@path, @title, @content, @excerpt, @mtime, @metadata, @status, @intelligence_status)
       ON CONFLICT(path) DO UPDATE SET
         title = excluded.title,
         content = excluded.content,
         excerpt = excluded.excerpt,
         mtime = excluded.mtime,
-        metadata = excluded.metadata
+        metadata = excluded.metadata,
+        status = excluded.status,
+        intelligence_status = excluded.intelligence_status
       RETURNING id
     `);
     
-    return stmt.get(record) as { id: number };
+    return stmt.get({
+      status: 'active',
+      intelligence_status: 'pending',
+      ...record
+    }) as { id: number };
   }
 
   public upsertVector(docId: number, embedding: Float32Array, provider: string) {
@@ -146,7 +188,35 @@ export class DatabaseService {
     `);
     
     // sqlite-vec expects raw buffer
+    this.db.prepare('UPDATE documents SET intelligence_status = "ready" WHERE id = ?').run(docId);
     return stmt.run(docId, Buffer.from(embedding.buffer), provider);
+  }
+
+  // --- Queue Methods ---
+
+  public addToQueue(docId: number, priority: number = 1) {
+    const stmt = this.db.prepare(`
+      INSERT INTO intelligence_queue (doc_id, priority, created_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(doc_id) DO UPDATE SET priority = excluded.priority
+    `);
+    return stmt.run(docId, priority, Date.now());
+  }
+
+  public getNextFromQueue(): { id: number, doc_id: number } | undefined {
+    return this.db.prepare(`
+      SELECT id, doc_id FROM intelligence_queue 
+      ORDER BY priority DESC, created_at ASC 
+      LIMIT 1
+    `).get() as any;
+  }
+
+  public removeFromQueue(id: number) {
+    return this.db.prepare('DELETE FROM intelligence_queue WHERE id = ?').run(id);
+  }
+
+  public setIntelligenceStatus(docId: number, status: 'pending' | 'processing' | 'ready') {
+    return this.db.prepare('UPDATE documents SET intelligence_status = ? WHERE id = ?').run(status, docId);
   }
 
   public searchHybrid(queryEmbedding: Float32Array, queryText: string, limit: number = 10) {
@@ -196,6 +266,30 @@ export class DatabaseService {
     return this.db.prepare('SELECT * FROM documents').all() as DBRecord[];
   }
 
+  public upsertSymbol(name: string, path: string, line: number, type: string, signature: string) {
+    const stmt = this.db.prepare(`
+      INSERT INTO symbols (name, path, line, type, signature)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(name, path) DO UPDATE SET
+        line = excluded.line,
+        type = excluded.type,
+        signature = excluded.signature
+    `);
+    return stmt.run(name, path, line, type, signature);
+  }
+
+  public removeSymbolsForPath(filePath: string) {
+    return this.db.prepare('DELETE FROM symbols WHERE path = ?').run(filePath);
+  }
+
+  public getSymbolByName(name: string) {
+    return this.db.prepare('SELECT * FROM symbols WHERE name = ?').get(name) as any | undefined;
+  }
+
+  public getAllSymbols() {
+    return this.db.prepare('SELECT * FROM symbols').all() as any[];
+  }
+
   public getVectorForDocument(docId: number) {
     const row = this.db.prepare('SELECT embedding FROM vec_documents WHERE id = ?').get(docId) as { embedding: Buffer } | undefined;
     return row ? new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4) : undefined;
@@ -204,7 +298,7 @@ export class DatabaseService {
   public searchSemantic(queryEmbedding: Float32Array, limit: number = 10) {
     const stmt = this.db.prepare(`
       SELECT 
-        d.path, d.title, d.excerpt,
+        d.id, d.path, d.title, d.excerpt,
         vec_distance_cosine(v.embedding, ?) as distance
       FROM vec_documents v
       JOIN documents d ON v.id = d.id
@@ -212,6 +306,24 @@ export class DatabaseService {
       LIMIT ?
     `);
     return stmt.all(Buffer.from(queryEmbedding.buffer), limit) as any[];
+  }
+
+  public getTopKNeighbors(docId: number, k: number = 3) {
+    const embedding = this.getVectorForDocument(docId);
+    if (!embedding) return [];
+
+    const stmt = this.db.prepare(`
+      SELECT 
+        d.path, d.title,
+        vec_distance_cosine(v.embedding, ?) as distance
+      FROM vec_documents v
+      JOIN documents d ON v.id = d.id
+      WHERE d.id != ?
+      ORDER BY distance ASC
+      LIMIT ?
+    `);
+
+    return stmt.all(Buffer.from(embedding.buffer), docId, k) as any[];
   }
 
   public close() {
