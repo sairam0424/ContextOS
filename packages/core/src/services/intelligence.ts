@@ -36,7 +36,7 @@ export class IntelligenceService {
       }
     });
 
-    this.miniSearch.addAll(indexData.records.map((r, i) => ({ ...r, id: i })));
+    this.miniSearch.addAll(indexData.records.map((r: IndexRecord, i: number) => ({ ...r, id: i })));
     return this.miniSearch;
   }
 

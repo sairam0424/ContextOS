@@ -7,6 +7,11 @@ export interface WorkspacePulse {
     topTags: string[];
     activeEntities: string[];
     recentChanges: string[];
+    intelligenceStatus: {
+        pending: number;
+        processing: number;
+        ready: number;
+    };
 }
 
 export class SamplingService {
@@ -37,6 +42,12 @@ export class SamplingService {
         const entityCounts: Record<string, number> = {};
         const recent: string[] = [];
 
+        const intelligenceStatus = {
+            pending: 0,
+            processing: 0,
+            ready: 0
+        };
+
         docs.forEach((doc: any) => {
             const tags = JSON.parse(doc.metadata || '[]');
             if (doc.title && tags.length > 0) completeDocs++;
@@ -44,6 +55,12 @@ export class SamplingService {
             tags.forEach((t: string) => {
                 tagCounts[t] = (tagCounts[t] || 0) + 1;
             });
+
+            // Intelligence Status Tracking
+            const status = (doc.intelligence_status || 'pending') as keyof typeof intelligenceStatus;
+            if (intelligenceStatus[status] !== undefined) {
+                intelligenceStatus[status]++;
+            }
 
             // Tracking recent changes (last 5)
             recent.push(doc.path);
@@ -61,8 +78,9 @@ export class SamplingService {
             timestamp: now,
             healthScore: Math.round(healthScore),
             topTags,
-            activeEntities: [], // Placeholder for entity mapping upgrade
-            recentChanges: recent.slice(-5).reverse()
+            activeEntities: [], 
+            recentChanges: recent.slice(-5).reverse(),
+            intelligenceStatus
         };
 
         this.cache = {
