@@ -47,7 +47,9 @@ export class KnowledgeGraphService {
                     type: 'document',
                     metadata: { 
                         excerpt: doc.excerpt,
-                        intelligenceStatus: doc.intelligence_status || 'pending'
+                        intelligenceStatus: doc.intelligence_status || 'pending',
+                        heat: this.dbService.getPathHeat(doc.path),
+                        lock: this.dbService.getLock(doc.path)
                     }
                 });
                 seenNodes.add(doc.path);

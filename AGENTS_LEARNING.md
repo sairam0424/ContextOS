@@ -209,5 +209,10 @@ Treat this file as the primary handoff mechanism. If a task is interrupted, the 
 - **Mitigation**: Switched to **Color-encoded links** and increased `linkWidth` for code references to achieve visual differentiation.
 - **Mistake**: Encountered multiple `TS18048` errors in the React HUD because the WebSocket can deliver partial updates or "entities" that lack document-specific metadata.
 - **Mitigation**: Enforced rigorous **optional chaining** (`?.`) across the entire Dashboard UI layer.
-- **Mistake**: Permission `EPERM` issues during build in the restricted environment.
 - **Mitigation**: Used local caches (`--cache ./npm_cache`) and verified `node` paths before running build scripts.
+
+### 4. Monorepo Build Desync (Core vs CLI)
+
+- **Mistake**: Adding a new export to `@context-os/core` but experiencing `TS2305` errors (no exported member) in dependent packages like CLI or MCP.
+- **Mitigation**: Always run `npm run build -w @context-os/core` after modifying core source code. Dependent packages consume the compiled `dist/` files, not the raw TypeScript source.
+- **Learning**: In a workspace setup, source changes are not "live" to other packages until the transpilation step (`tsc`) updates the distributed type definitions.

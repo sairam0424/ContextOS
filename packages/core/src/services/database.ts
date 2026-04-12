@@ -126,6 +126,26 @@ export class DatabaseService {
         created_at INTEGER
       );
     `);
+
+    // 9. Locks Table (Nexus Concurrency)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS locks (
+        path TEXT PRIMARY KEY,
+        agent_id TEXT,
+        expires_at INTEGER,
+        created_at INTEGER
+      );
+    `);
+
+    // 10. Access Log (Pulse Weighting)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS access_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        path TEXT,
+        action TEXT, -- 'read', 'write', 'focus'
+        timestamp INTEGER
+      );
+    `);
   }
 
   public upsertEdge(source: string, target: string, type: string, weight: number) {
@@ -326,7 +346,60 @@ export class DatabaseService {
     return stmt.all(Buffer.from(embedding.buffer), docId, k) as any[];
   }
 
+  // --- Lock Methods ---
+
+  public acquireLock(path: string, agentId: string, durationMs: number = 300000) {
+    const expiresAt = Date.now() + durationMs;
+    const stmt = this.db.prepare(`
+      INSERT INTO locks (path, agent_id, expires_at, created_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(path) DO UPDATE SET
+        agent_id = CASE 
+          WHEN expires_at < ? THEN excluded.agent_id 
+          WHEN agent_id = excluded.agent_id THEN excluded.agent_id
+          ELSE agent_id 
+        END,
+        expires_at = CASE 
+          WHEN expires_at < ? THEN excluded.expires_at 
+          WHEN agent_id = excluded.agent_id THEN excluded.expires_at
+          ELSE expires_at 
+        END
+    `);
+    const now = Date.now();
+    return stmt.run(path, agentId, expiresAt, now, now, now);
+  }
+
+  public releaseLock(path: string, agentId: string) {
+    const stmt = this.db.prepare('DELETE FROM locks WHERE path = ? AND agent_id = ?');
+    return stmt.run(path, agentId);
+  }
+
+  public getLock(path: string) {
+    const row = this.db.prepare('SELECT * FROM locks WHERE path = ?').get(path) as any;
+    if (row && row.expires_at < Date.now()) {
+      this.db.prepare('DELETE FROM locks WHERE path = ?').run(path);
+      return undefined;
+    }
+    return row;
+  }
+
+  // --- Access Log Methods ---
+
+  public logAccess(path: string, action: 'read' | 'write' | 'focus') {
+    const stmt = this.db.prepare('INSERT INTO access_log (path, action, timestamp) VALUES (?, ?, ?)');
+    return stmt.run(path, action, Date.now());
+  }
+
+  public getPathHeat(path: string, windowMs: number = 3600000) {
+    const since = Date.now() - windowMs;
+    const stmt = this.db.prepare('SELECT COUNT(*) as count FROM access_log WHERE path = ? AND timestamp > ?');
+    return (stmt.get(path, since) as any).count;
+  }
+
   public close() {
     this.db.close();
   }
 }
+
+import { getWorkspaceRoot } from '../context.js';
+export const databaseService = new DatabaseService(getWorkspaceRoot());
