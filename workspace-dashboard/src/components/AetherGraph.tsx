@@ -101,6 +101,22 @@ const AetherGraph: React.FC<Props> = ({ onNodeClick, graphData, focusedNodeId })
           mesh.material.color.set(0x00f0ff); // Pending
         }
 
+        // 🟢 NEXUS UPGRADE: Heat Scaling
+        const heat = node.metadata?.heat || 0;
+        const heatMultiplier = 1 + Math.min(heat * 0.2, 1.5);
+        mesh.scale.set(heatMultiplier, heatMultiplier, heatMultiplier);
+        
+        if (heat > 0) {
+            mesh.material.emissiveIntensity = 0.5 + (heat * 0.5);
+        }
+
+        // 🔒 NEXUS UPGRADE: Locking Status
+        if (node.metadata?.lock) {
+            mesh.material.color.set(0xef4444); // Red (Locked)
+            mesh.material.emissive.set(0xef4444);
+            mesh.material.emissiveIntensity = 2.0;
+        }
+
         if (node.id === focusedNodeId) {
             mesh.material = focusMaterial;
             mesh.scale.set(1.5, 1.5, 1.5);

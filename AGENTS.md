@@ -1,6 +1,6 @@
 # 📡 ContextOS: Spatial HUD Protocol (Aether)
 
-You are operating within the **ContextOS Aether Edition (v1.6.1)**. This workspace is a live Spatial Intelligence target.
+You are operating within the **ContextOS Nexus Edition (v1.10.0)**. This workspace is a live Spatial Intelligence target.
 
 ## 🕹️ HUD Maintenance Rules
 

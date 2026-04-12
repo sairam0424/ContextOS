@@ -18,7 +18,7 @@ jobs:
       - name: 🟢 Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22
           registry-url: 'https://registry.npmjs.org'
 
       - name: 📦 Install
@@ -32,6 +32,11 @@ jobs:
 
       - name: 🧪 Test
         run: npm run test
+
+      - name: 🚀 Publish Core
+        run: npm publish -w packages/core --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: 🚀 Publish CLI
         run: npm publish -w @context-os/cli --access public

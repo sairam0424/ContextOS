@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec } from "node:child_process";
 import { WebSocketServer } from "ws";
-import { samplingService, knowledgeGraphService, watchService } from "@context-os/core";
+import { samplingService, knowledgeGraphService, watchService, lockingService } from "@context-os/core";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -136,6 +136,17 @@ export function dashboardCommand(program: Command) {
                   if (doc && doc.id) {
                     db.addToQueue(doc.id, 10); // High priority
                   }
+                  break;
+                case "request_lock":
+                  await lockingService.acquire(payload.path, payload.agentId || 'human');
+                  break;
+                case "release_lock":
+                  await lockingService.release(payload.path, payload.agentId || 'human');
+                  break;
+                case "fix_lint":
+                  console.log(chalk.blue(`  - HUD Action: Running lint fix on ${payload.path}`));
+                  // Placeholder for actual lint command execution
+                  // In a real scenario, this would spawn 'npm run lint -- --fix path'
                   break;
               }
 

@@ -238,7 +238,7 @@ function App() {
 
                {selectedNode.type === 'document' && (
                  <div className="mt-4">
-                    <div className="font-display text-[9px] uppercase text-primary tracking-[2px] opacity-60 mb-3">Aether Actions</div>
+                    <div className="font-display text-[9px] uppercase text-primary tracking-[2px] opacity-60 mb-3">Nexus Actions</div>
                     <button 
                       className="w-full text-[10px] p-4 glass bg-primary/5 hover:bg-primary/10 text-primary border-primary/20 flex items-center justify-between group transition-all"
                       onClick={() => {
@@ -246,7 +246,7 @@ function App() {
                         setTicker("SYSTEM: SELECT TARGET NODE TO BRIDGE...");
                       }}
                     >
-                      <span className="font-display tracking-[1px]">ESTABLISH MANUAL BRIDGE</span>
+                      <span className="font-display tracking-[1px]">ACQUIRE CONCURRENCY LOCK</span>
                       <BrainCircuit size={14} className="group-hover:rotate-12 transition-transform" />
                     </button>
                  </div>
@@ -273,7 +273,7 @@ function App() {
           </div>
 
           <div className="glass py-2 px-4 pointer-events-auto font-display text-[10px] tracking-[1px]">
-            DECK: <span className="text-primary">V1.9.0-AETHER-CMD-CENTER</span>
+            DECK: <span className="text-primary">V1.10.0-NEXUS-CORE</span>
           </div>
         </footer>
       </div>
