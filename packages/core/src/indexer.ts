@@ -1,5 +1,9 @@
 import path from 'node:path';
 import fs from 'fs-extra';
+import { createHash } from 'node:crypto';
+import Parser from 'tree-sitter';
+import TypeScript from 'tree-sitter-typescript';
+import Python from 'tree-sitter-python';
 import { workspaceRoot, ALLOWED_BUCKETS } from './context.js';
 import { validationService } from './services/validation.js';
 import { DatabaseService, DBRecord } from './services/database.js';
@@ -14,6 +18,7 @@ export interface IndexRecord {
     excerpt: string;
     content: string;
     mentions: string[];
+    is_private: boolean;
 }
 
 export class ContextIndexer {
@@ -25,6 +30,10 @@ export class ContextIndexer {
         // Load API key if present for Elite mode
         const geminiKey = process.env.GEMINI_API_KEY;
         this.embeddingService = new EmbeddingService(geminiKey);
+    }
+
+    public getDatabase(): DatabaseService {
+        return this.dbService;
     }
 
     /**
@@ -97,6 +106,7 @@ export class ContextIndexer {
                 excerpt: record.excerpt,
                 mtime: record.lastModified,
                 metadata: JSON.stringify(record.tags),
+                is_private: record.is_private ? 1 : 0,
                 intelligence_status: 'pending'
             });
 
@@ -126,7 +136,7 @@ export class ContextIndexer {
     }
 
     /**
-     * Extracts exported symbols from source code files.
+     * Extracts exported symbols from source code files using AST parsing (Tree-Sitter).
      */
     public async indexCodeFile(filePath: string, mtimeMs?: number): Promise<void> {
         if (!mtimeMs) {
@@ -135,39 +145,80 @@ export class ContextIndexer {
         }
 
         const relativePath = path.relative(workspaceRoot, filePath);
+        const isPrivate = filePath.includes('.private');
         
-        // Cleanup old symbols for this file
+        // Aether 2.0: Differential check (Optimization 2.3)
+        // We clean up symbols only if we are forced to re-index or the file is new.
+        // For now, we clean up per file to ensure accuracy.
         this.dbService.removeSymbolsForPath(relativePath);
 
         const content = await fs.readFile(filePath, 'utf8');
+        const parser = new Parser();
         const lines = content.split('\n');
         
         if (filePath.endsWith('.ts') || filePath.endsWith('.tsx')) {
-            const tsRegex = /export\s+(function|class|const|async\s+function|interface|type)\s+([a-zA-Z0-9_]+)/g;
-            let match;
-            while ((match = tsRegex.exec(content)) !== null) {
-                const name = match[2];
-                const type = match[1];
-                const offset = match.index;
-                const lineNo = content.slice(0, offset).split('\n').length;
-                const signature = lines[lineNo - 1].trim();
+            const lang = filePath.endsWith('.tsx') ? TypeScript.tsx : TypeScript.typescript;
+            // @ts-ignore
+            parser.setLanguage(lang);
+            const tree = parser.parse(content);
+            
+            const query = new Parser.Query(lang, `
+                (export_statement
+                    [
+                        (function_declaration name: (identifier) @name)
+                        (class_declaration name: (identifier) @name)
+                        (lexical_declaration (variable_declarator name: (identifier) @name))
+                        (interface_declaration name: (type_identifier) @name)
+                        (type_alias_declaration name: (type_identifier) @name)
+                    ]
+                ) @export
+            `);
+            
+            const matches = query.matches(tree.rootNode);
+            for (const match of matches) {
+                const nameNode = match.captures.find(c => c.name === 'name')?.node;
+                const exportNode = match.captures.find(c => c.name === 'export')?.node;
                 
-                this.dbService.upsertSymbol(name, relativePath, lineNo, type, signature);
-                // Also add a graph node for the symbol
-                this.dbService.upsertEdge(relativePath, `symbol:${name}`, 'contains', 0.5);
+                if (nameNode && exportNode) {
+                    const name = nameNode.text;
+                    const lineNo = nameNode.startPosition.row + 1;
+                    const type = exportNode.type; 
+                    const signature = lines[lineNo - 1]?.trim() || '';
+                    
+                    // Aether 2.0: Block Hashing
+                    const blockHash = createHash('md5').update(exportNode.text).digest('hex');
+                    
+                    this.dbService.upsertSymbol(name, relativePath, lineNo, type, signature, blockHash);
+                    this.dbService.upsertEdge(relativePath, `symbol:${name}`, 'contains', 0.5);
+                }
             }
         } else if (filePath.endsWith('.py')) {
-            const pyRegex = /^(def|class)\s+([a-zA-Z0-9_]+)/gm;
-            let match;
-            while ((match = pyRegex.exec(content)) !== null) {
-                const name = match[2];
-                const type = match[1];
-                const offset = match.index;
-                const lineNo = content.slice(0, offset).split('\n').length;
-                const signature = lines[lineNo - 1].trim();
+            // @ts-ignore
+            parser.setLanguage(Python);
+            const tree = parser.parse(content);
+            
+            const query = new Parser.Query(Python, `
+                (class_definition name: (identifier) @name) @class
+                (function_definition name: (identifier) @name) @function
+            `);
+            
+            const matches = query.matches(tree.rootNode);
+            for (const match of matches) {
+                const nameNode = match.captures.find(c => c.name === 'name')?.node;
+                const node = match.captures.find(c => c.name === 'class' || c.name === 'function')?.node;
                 
-                this.dbService.upsertSymbol(name, relativePath, lineNo, type, signature);
-                this.dbService.upsertEdge(relativePath, `symbol:${name}`, 'contains', 0.5);
+                if (nameNode && node) {
+                    const name = nameNode.text;
+                    const lineNo = nameNode.startPosition.row + 1;
+                    const type = node.type === 'class_definition' ? 'class' : 'function';
+                    const signature = lines[lineNo - 1]?.trim() || '';
+                    
+                    // Aether 2.0: Block Hashing
+                    const blockHash = createHash('md5').update(node.text).digest('hex');
+                    
+                    this.dbService.upsertSymbol(name, relativePath, lineNo, type, signature, blockHash);
+                    this.dbService.upsertEdge(relativePath, `symbol:${name}`, 'contains', 0.5);
+                }
             }
         }
     }
@@ -211,15 +262,19 @@ export class ContextIndexer {
                 ...bodyTags
             ]));
 
+            // Private Detection: Frontmatter or .private directory
+            const isPrivate = metadata.private === true || filePath.includes('.private');
+
             return {
                 path: relativePath,
                 title,
-                tags,
+                tags: metadata.tags || [],
                 status: metadata.status || 'active',
                 lastModified: mtimeMs,
                 excerpt,
-                content: body,
-                mentions
+                content,
+                mentions,
+                is_private: isPrivate
             };
         } catch (error) {
             console.error(`Failed to index ${filePath}:`, error);
@@ -241,7 +296,8 @@ export class ContextIndexer {
             status: r.status || 'active',
             lastModified: r.mtime,
             content: r.content,
-            mentions: [] // Not stored in main column yet
+            mentions: [],
+            is_private: !!r.is_private
         }));
     }
 }
