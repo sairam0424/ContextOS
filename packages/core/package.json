@@ -31,7 +31,10 @@
     "fs-extra": "^11.2.0",
     "js-yaml": "^3.14.2",
     "minisearch": "^7.2.0",
-    "sqlite-vec": "^0.1.9"
+    "sqlite-vec": "^0.1.9",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
