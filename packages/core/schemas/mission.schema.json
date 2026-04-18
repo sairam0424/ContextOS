@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Mission",
+  "type": "object",
+  "required": ["id", "title", "status", "anchor_node"],
+  "properties": {
+    "id": { "type": "string" },
+    "title": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "approved", "executing", "verified", "archived"],
+      "default": "draft"
+    },
+    "anchor_node": { "type": "string", "description": "The primary graph node this mission orbits." },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"], "default": "medium" },
+    "assigned_capability": { "type": "string", "description": "The current agent capability owning this mission." },
+    "consequences": { "type": "array", "items": { "type": "string" }, "description": "Technical debt or architectural shifts created by this mission." }
+  }
+}
