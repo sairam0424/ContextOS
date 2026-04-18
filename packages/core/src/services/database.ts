@@ -43,6 +43,7 @@ export class DatabaseService {
         mtime INTEGER,
         metadata TEXT,
         status TEXT DEFAULT 'active',
+        is_private INTEGER DEFAULT 0,
         intelligence_status TEXT DEFAULT 'pending'
       );
     `);
@@ -113,6 +114,7 @@ export class DatabaseService {
         line INTEGER,
         type TEXT,
         signature TEXT,
+        hash TEXT,
         UNIQUE(name, path)
       );
     `);
@@ -176,10 +178,31 @@ export class DatabaseService {
     return this.db.prepare('SELECT * FROM edges').all() as any[];
   }
 
-  public upsertDocument(record: DBRecord & { status?: string, intelligence_status?: string }) {
+  /**
+   * Fetches graph affinity scores for nodes connected to the given path.
+   * Phase 4: Multi-degree connection weighting.
+   */
+  public getAffinities(nodePath: string): Map<string, number> {
+    const affinities = new Map<string, number>();
+    
+    // 1st Degree: Direct Links (Weight: 1.0x)
+    const direct = this.db.prepare(`
+      SELECT target as id, weight FROM edges WHERE source = ?
+      UNION ALL
+      SELECT source as id, weight FROM edges WHERE target = ?
+    `).all(nodePath, nodePath) as any[];
+
+    for (const d of direct) {
+      affinities.set(d.id, (affinities.get(d.id) || 0) + d.weight);
+    }
+
+    return affinities;
+  }
+
+  public upsertDocument(record: DBRecord & { status?: string, intelligence_status?: string, is_private?: number }) {
     const stmt = this.db.prepare(`
-      INSERT INTO documents (path, title, content, excerpt, mtime, metadata, status, intelligence_status)
-      VALUES (@path, @title, @content, @excerpt, @mtime, @metadata, @status, @intelligence_status)
+      INSERT INTO documents (path, title, content, excerpt, mtime, metadata, status, is_private, intelligence_status)
+      VALUES (@path, @title, @content, @excerpt, @mtime, @metadata, @status, @is_private, @intelligence_status)
       ON CONFLICT(path) DO UPDATE SET
         title = excluded.title,
         content = excluded.content,
@@ -187,15 +210,22 @@ export class DatabaseService {
         mtime = excluded.mtime,
         metadata = excluded.metadata,
         status = excluded.status,
+        is_private = excluded.is_private,
         intelligence_status = excluded.intelligence_status
       RETURNING id
     `);
     
     return stmt.get({
       status: 'active',
+      is_private: 0,
       intelligence_status: 'pending',
       ...record
     }) as { id: number };
+  }
+
+  public updateDocumentStatus(path: string, status: string) {
+    const stmt = this.db.prepare('UPDATE documents SET intelligence_status = ? WHERE path = ?');
+    return stmt.run(status, path);
   }
 
   public upsertVector(docId: number, embedding: Float32Array, provider: string) {
@@ -239,38 +269,65 @@ export class DatabaseService {
     return this.db.prepare('UPDATE documents SET intelligence_status = ? WHERE id = ?').run(status, docId);
   }
 
-  public searchHybrid(queryEmbedding: Float32Array, queryText: string, limit: number = 10) {
-    // This is a simplified hybrid search. 
-    // It finds top semantic matches and top keyword matches.
+  public searchHybrid(queryEmbedding: Float32Array, queryText: string, limit: number = 10, includePrivate: boolean = false) {
+    const privateFilter = includePrivate ? "" : "AND d.is_private = 0";
     
     // 1. Semantic Search
     const semanticStmt = this.db.prepare(`
       SELECT 
-        d.path, d.title, d.excerpt,
+        d.id, d.path, d.title, d.excerpt, d.metadata, d.is_private,
         vec_distance_cosine(v.embedding, ?) as distance
       FROM vec_documents v
       JOIN documents d ON v.id = d.id
+      WHERE d.status = 'active' ${privateFilter}
       ORDER BY distance ASC
       LIMIT ?
     `);
     
-    const semanticResults = semanticStmt.all(Buffer.from(queryEmbedding.buffer), limit);
+    const semanticResults = semanticStmt.all(Buffer.from(queryEmbedding.buffer), limit * 2) as any[];
 
     // 2. Keyword Search (FTS5)
     const keywordStmt = this.db.prepare(`
       SELECT 
-        d.path, d.title, d.excerpt,
+        d.id, d.path, d.title, d.excerpt, d.metadata, d.is_private,
         rank as fts_score
       FROM fts_documents f
       JOIN documents d ON f.rowid = d.id
-      WHERE fts_documents MATCH ?
+      WHERE fts_documents MATCH ? AND d.status = 'active' ${privateFilter}
       ORDER BY rank
       LIMIT ?
     `);
     
-    const keywordResults = keywordStmt.all(queryText, limit);
+    const keywordResults = keywordStmt.all(queryText, limit * 2) as any[];
 
-    return { semanticResults, keywordResults };
+    // 3. Aether 2.0: Distance-Weighted Fusion
+    const seen = new Map<string, any>();
+    
+    semanticResults.forEach((r, i) => {
+      seen.set(r.path, {
+        ...r,
+        score: (1 - r.distance) * 0.7 + (1 / (i + 1)) * 0.3 // weighted semantic
+      });
+    });
+
+    keywordResults.forEach((r, i) => {
+      const existing = seen.get(r.path);
+      const kScore = (1 / (i + 1)) * 0.5; // fts relative position weighting
+      if (existing) {
+        existing.score += kScore;
+      } else {
+        seen.set(r.path, {
+          ...r,
+          score: kScore
+        });
+      }
+    });
+
+    const combined = Array.from(seen.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    return { semanticResults, keywordResults, combined };
   }
 
   public getDocumentByPath(filePath: string) {
@@ -286,16 +343,17 @@ export class DatabaseService {
     return this.db.prepare('SELECT * FROM documents').all() as DBRecord[];
   }
 
-  public upsertSymbol(name: string, path: string, line: number, type: string, signature: string) {
+  public upsertSymbol(name: string, path: string, line: number, type: string, signature: string, hash: string = '') {
     const stmt = this.db.prepare(`
-      INSERT INTO symbols (name, path, line, type, signature)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO symbols (name, path, line, type, signature, hash)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(name, path) DO UPDATE SET
         line = excluded.line,
         type = excluded.type,
-        signature = excluded.signature
+        signature = excluded.signature,
+        hash = excluded.hash
     `);
-    return stmt.run(name, path, line, type, signature);
+    return stmt.run(name, path, line, type, signature, hash);
   }
 
   public removeSymbolsForPath(filePath: string) {
