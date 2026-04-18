@@ -1,7 +1,7 @@
 export interface NodeData {
   id: string;
   label: string;
-  type: 'file' | 'tag' | 'mention' | 'symbol' | 'document' | 'entity';
+  type: 'file' | 'tag' | 'mention' | 'symbol' | 'document' | 'entity' | 'mission';
   val?: number; // size for force graph
   color?: string;
   metadata?: {
@@ -13,6 +13,12 @@ export interface NodeData {
     symbolType?: string;
     signature?: string;
     intelligenceStatus?: 'pending' | 'processing' | 'ready';
+    // Aether 2.0 Additions
+    heat?: number;
+    lock?: boolean;
+    actions?: string[];
+    status?: string;
+    bucket?: string;
   };
 }
 

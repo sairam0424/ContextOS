@@ -38,7 +38,7 @@ const AetherGraph: React.FC<Props> = ({ onNodeClick, graphData, focusedNodeId })
         const node = graphData.nodes.find(n => n.id === focusedNodeId);
         if (node) {
             // Camera follow
-            const distance = 80;
+            const distance = 100;
             const distRatio = 1 + distance / Math.hypot((node as any).x, (node as any).y, (node as any).z);
             fgRef.current.cameraPosition(
                 { x: (node as any).x * distRatio, y: (node as any).y * distRatio, z: (node as any).z * distRatio },
@@ -49,16 +49,53 @@ const AetherGraph: React.FC<Props> = ({ onNodeClick, graphData, focusedNodeId })
     }
   }, [focusedNodeId, graphData]);
 
+  // Aether 2.0: Planet & Moon Clustering Force
+  useEffect(() => {
+    if (fgRef.current) {
+      fgRef.current.d3Force('cluster', (alpha: number) => {
+        graphData.nodes.forEach((node: any) => {
+          if (node.type !== 'bucket' && node.metadata?.bucketId) {
+            const bucketNode = graphData.nodes.find(n => n.id === node.metadata.bucketId);
+            if (bucketNode && (bucketNode as any).x !== undefined) {
+              const b = bucketNode as any;
+              node.vx += (b.x - node.x) * alpha * 0.15;
+              node.vy += (b.y - node.y) * alpha * 0.15;
+              node.vz += (b.z - node.z) * alpha * 0.15;
+            }
+          }
+        });
+      });
+      // Strengthen link force for local proximity
+      fgRef.current.d3Force('link')?.distance(30);
+    }
+  }, [graphData]);
+
   return (
     <ForceGraph3D
       ref={fgRef}
       graphData={graphData}
       backgroundColor="rgba(0,0,0,0)"
-      nodeLabel="label"
+      nodeLabel={(node: any) => {
+        let label = `<div class="aether-node-label">
+          <strong>${node.label || node.id}</strong><br/>
+          <small>${node.type}</small>`;
+        
+        if (node.metadata?.actions && node.metadata.actions.length > 0) {
+          label += `<div class="aether-actions">
+            ${node.metadata.actions.map((a: string) => `<span>[${a}]</span>`).join(' ')}
+          </div>`;
+        }
+        
+        label += `</div>`;
+        return label;
+      }}
       nodeColor={(node: any) => {
         if (node.type === 'tag') return '#a855f7';
         if (node.type === 'symbol') return '#22d3ee'; // Cyan
         if (node.type === 'entity') return '#94a3b8'; // Slate
+        if (node.type === 'mission') return '#f97316'; // Orange
+        if (node.type === 'bucket') return '#ec4899'; // Pink (Planetary center)
+        if (node.metadata?.is_private) return 'rgba(100, 116, 139, 0.4)'; // Ghostly
         return '#00f0ff';
       }}
       linkColor={(link: any) => {
@@ -78,6 +115,10 @@ const AetherGraph: React.FC<Props> = ({ onNodeClick, graphData, focusedNodeId })
           geometry = new THREE.OctahedronGeometry(Math.sqrt(node.val || 5) * 2);
         } else if (node.type === 'symbol') {
           geometry = new THREE.IcosahedronGeometry(Math.sqrt(node.val || 5) * 1.2);
+        } else if (node.type === 'mission') {
+          geometry = new THREE.DodecahedronGeometry(Math.sqrt(node.val || 5) * 2.5);
+        } else if (node.type === 'bucket') {
+          geometry = new THREE.SphereGeometry(Math.sqrt(node.val || 50) * 3);
         } else {
           geometry = new THREE.SphereGeometry(Math.sqrt(node.val || 5) * 1.5);
         }
@@ -91,12 +132,20 @@ const AetherGraph: React.FC<Props> = ({ onNodeClick, graphData, focusedNodeId })
           mesh.material.color.set(0x22d3ee);
         } else if (node.type === 'entity') {
           mesh.material.color.set(0x94a3b8);
-        } else if (status === 'processing') {
-          mesh.material.color.set(0xfacc15); // Yellow Pulse
+        } else if (status === 'processing' || status === 'repairing') {
+          mesh.material.color.set(0xfacc15); // Yellow Pulse (Processing or Repairing)
           mesh.material.emissive.set(0xfacc15);
-          mesh.material.emissiveIntensity = 1.0;
+          mesh.material.emissiveIntensity = status === 'repairing' ? 2.0 : 1.0;
         } else if (status === 'ready') {
           mesh.material.color.set(0x34d399); // Green (Complete)
+        } else if (status === 'error') {
+          mesh.material.color.set(0xef4444); // Red (Error/Blocked)
+          mesh.material.emissive.set(0xef4444);
+          mesh.material.emissiveIntensity = 1.0;
+        } else if (node.type === 'mission') {
+          mesh.material.color.set(0xf97316); // Mission Orange
+          mesh.material.emissive.set(0xf97316);
+          mesh.material.emissiveIntensity = 0.8;
         } else {
           mesh.material.color.set(0x00f0ff); // Pending
         }
@@ -111,8 +160,8 @@ const AetherGraph: React.FC<Props> = ({ onNodeClick, graphData, focusedNodeId })
         }
 
         // 🔒 NEXUS UPGRADE: Locking Status
-        if (node.metadata?.lock) {
-            mesh.material.color.set(0xef4444); // Red (Locked)
+        if (node.metadata?.lock || status === 'error') {
+            mesh.material.color.set(0xef4444); // Red (Locked or Error)
             mesh.material.emissive.set(0xef4444);
             mesh.material.emissiveIntensity = 2.0;
         }
