@@ -1,8 +1,8 @@
-# 🌌 ContextOS: Aether Edition (v1.6.1)
+# 🌌 ContextOS: Nexus Edition (v1.11.0)
 
-> **The Spatial Intelligence Command Deck for Autonomous AI Agents.**
+> **The Autonomous Spatial Intelligence Layer for AI Agents.**
 
-ContextOS is a high-fidelity intelligence infrastructure designed to bridge the gap between raw development activity and structured, actionable AI context. It provides a specialized set of tools (CLI & MCP) to help developers and AI agents maintain a project's "soul," long-term memory, and architectural integrity.
+ContextOS is a high-fidelity intelligence infrastructure designed to bridge the gap between development activity and structured AI context. The **Nexus Edition** introduces autonomous self-healing, graph-aware search weighting, and real-time resilience telemetry.
 
 ---
 
@@ -34,12 +34,14 @@ Before publishing, you must bump the version in **all 4 manifests**.
 
 ---
 
-## 🕹️ The Aether Command Deck
-The v1.6.1 release introduces the **Aether HUD**, a real-time visual control center for your workspace.
+## 🕹️ The Aether Command Deck (Nexus)
+The v1.11.0 upgrade transforms the **Aether HUD** into an active mission-control dashboard.
 
-*   **3D Knowledge Graph**: Visualize the relationships between your project's "Soul," memory, and active decisions in a spatial force-directed graph.
-*   **The Sentinel (Watch Service)**: Full-auto background indexing that ensures your AI agents always have the freshest architectural intelligence.
-*   **Hybrid Semantic Mesh**: Combines high-speed relational grep with deep semantic extraction for unified context resolution.
+*   **Autonomous Resilience (Janitor Agent)**: Gemini-powered self-healing that automatically reconstructs broken context or damaged project schemas with 3rd-attempt safety loops.
+*   **Spatial RAG**: Topological search weighting that prioritizes results based on graph proximity, significantly reducing context noise for agents.
+*   **Resilience Telemetry**: Nodes undergoing repair pulse with high-intensity yellow light, while persistent failures glow red for human intervention.
+*   **The Sentinel (Watch Service)**: Proactive background health monitoring that ensures architectural intelligence is always synchronized.
+*   **3D Knowledge Graph**: Immersive visualization of the project "Soul," memory patterns, and architectural decisions.
 
 ---
 

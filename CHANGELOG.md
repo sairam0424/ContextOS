@@ -2,6 +2,26 @@
 
 All notable changes to the ContextOS platform will be documented in this file.
 
+## [1.11.0] - 2026-04-19
+
+### Added
+- **Janitor Agent (Autonomous Resilience)**: Gemini-powered self-healing engine for context reconstruction.
+- **Spatial RAG**: Graph-affinity search boosting based on topological proximity.
+- **Resilience Telemetry**: Real-time HUD indicators for repair states and persistent failures.
+
+## [1.10.0] - 2026-04-10
+
+### Added
+- **Aether Nexus Initial Release**: Introduced the foundation for autonomous background services.
+- **Sentinel Watcher**: Low-latency file monitoring and incremental indexing.
+- **Capability-Based Routing**: Enhanced mission orchestration for multi-agent systems.
+
+## [1.9.1] - 2026-04-09
+
+### Added
+- **Monorepo Stabilization**: Sequential publication protocol for Core, CLI, and MCP packages.
+- **Intelligence Mirroring**: Automated schema and root-doc synchronization between packages.
+
 ## [1.6.1] - 2026-04-10
 
 ### Added
