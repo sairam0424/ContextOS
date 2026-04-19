@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Capability",
+  "type": "object",
+  "required": ["id", "role", "expertise"],
+  "properties": {
+    "id": { "type": "string" },
+    "role": { "type": "string", "description": "e.g., 'ui-architect', 'backend-security', 'devops-master'" },
+    "description": { "type": "string" },
+    "expertise": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Keywords or domains this capability handles."
+    },
+    "tools": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Restricted list of allowed MCP tools for this capability."
+    },
+    "affinity": {
+      "type": "number",
+      "description": "Graph affinity score (0-1) for matching related nodes.",
+      "default": 0.5
+    }
+  }
+}

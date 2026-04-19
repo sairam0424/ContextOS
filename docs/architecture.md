@@ -19,6 +19,7 @@ graph TD
     subgraph "Intelligence & Validation"
         Logic["Business Logic (Memory/Lifecycle)"]
         Sentinel["The Sentinel (FSEvents/Watch)"]
+        Janitor["Janitor Agent (Autonomous Resilience)"]
         Schema["Schema Enforcement (JSON Schema)"]
         Security["Allowed-Bucket Security"]
     end
@@ -139,10 +140,23 @@ Every piece of context in ContextOS is validated against strict JSON Schemas.
 
 ## 📡 Real-time Intelligence (The Sentinel)
 
-ContextOS v1.6.1 introduces the **Sentinel** pattern, which shifts from batch-processing to real-time event-driven intelligence.
+ContextOS v1.11.0 evolves the **Sentinel** into an active maintenance service.
 
 - **Event Stream**: Uses native `fsevents` to detect filesystem deltas.
 - **Immediate Validation**: Edits are structurally validated as they happen, preventing the entry of "Dirty Context" into the knowledge mesh.
+
+### 🛡️ Autonomous Resilience (Janitor Agent)
+Introduced in v1.11.0, the Janitor Agent provides high-fidelity self-healing for the intelligence layer.
+- **Gemini-Powered Repair**: If a `context.md` or project file becomes corrupted or loses version parity, the Janitor Agent uses Gemini 1.5 Pro to reconstruct the state based on the neighboring telemetry.
+- **Fail-Safe Loops**: Implements a strict 3-attempt limit per file to prevent recursive repair failures and minimize token expenditure.
+
+---
+
+## 🧭 Spatial RAG (Retrieval-Augmented Geometry)
+
+The retrieval engine in v1.11.0 now uses graph-aware affinity scoring.
+- **Topological Weighting**: Search results are boosted based on their "Logical Distance" to the current mission focus in the knowledge graph.
+- **Contextual Affinity**: Agents no longer retrieve disjointed fragments; they receive a semantically coherent "Spatial Neighborhood" of information.
 
 ---
 
@@ -155,4 +169,4 @@ ContextOS treats the file system as the database and **Git as the transaction lo
 
 ---
 
-*Identity: Antigravity v1.6.1 (Aether)*
+*Identity: Antigravity v2.2 (Nexus)*

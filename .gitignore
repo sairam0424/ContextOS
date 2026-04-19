@@ -17,3 +17,5 @@ prompts/
 \n# ContextOS Data Warehouse\n.context-db/
 
 .context-db/
+
+error-logs.md 

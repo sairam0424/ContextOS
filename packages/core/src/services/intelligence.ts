@@ -5,6 +5,7 @@ import { globalIndexer, IndexRecord } from "../indexer.js";
 import { getWorkspaceRoot } from "../context.js";
 import { DatabaseService } from "./database.js";
 import { EmbeddingService } from "./embedding.js";
+import { capabilityService } from "./capability.js";
 
 const execAsync = promisify(exec);
 
@@ -43,7 +44,7 @@ export class IntelligenceService {
   /**
    * Hybrid Search: Semantic (sqlite-vec) + Keyword (FTS5) -> Lite Index (MiniSearch) -> Grep Fallback
    */
-  async search(query: string, options: { deep?: boolean } = {}): Promise<SearchResult[]> {
+  async search(query: string, options: { deep?: boolean, includePrivate?: boolean, anchorNode?: string } = {}): Promise<SearchResult[]> {
     // 1. Try Elite Hybrid Search First (SQLite-Vec + FTS5)
     if (!options.deep) {
       if (!this.dbService) this.dbService = new DatabaseService(getWorkspaceRoot());
@@ -51,39 +52,33 @@ export class IntelligenceService {
 
       try {
         const queryEmbedding = await this.embeddingService.generate(query);
-        const { semanticResults, keywordResults } = this.dbService.searchHybrid(queryEmbedding, query);
+        const { combined } = this.dbService.searchHybrid(queryEmbedding, query, 10, options.includePrivate);
 
-        const results: SearchResult[] = [];
-        const seenPaths = new Set<string>();
+        // Aether 2.0: Swarm Capability Match
+        const capability = capabilityService.match(query);
+        console.log(`[Swarm] Matched capability: ${capability.role} for query: ${query}`);
 
-        // Add Semantic Results
-        semanticResults.forEach((res: any) => {
-          results.push({
-            path: res.path,
-            title: res.title,
-            tags: [],
-            excerpt: res.excerpt,
-            score: 1 - res.distance,
-            type: 'semantic'
-          });
-          seenPaths.add(res.path);
-        });
+        if (combined.length > 0) {
+          const affinities = options.anchorNode ? this.dbService.getAffinities(options.anchorNode) : new Map<string, number>();
 
-        // Add Keyword Results (if not already seen)
-        keywordResults.forEach((res: any) => {
-          if (!seenPaths.has(res.path)) {
-            results.push({
+          return combined.map((res: any) => {
+            let score = res.score;
+            // Phase 4: Spatial Boost (Retrieval-Augmented Geometry)
+            const affinity = affinities.get(res.path) || 0;
+            if (affinity > 0) {
+              score *= (1 + affinity); 
+            }
+
+            return {
               path: res.path,
               title: res.title,
-              tags: [],
+              tags: JSON.parse(res.metadata || '[]'),
               excerpt: res.excerpt,
-              score: res.fts_score,
-              type: 'index'
-            });
-          }
-        });
-
-        if (results.length > 0) return results;
+              score,
+              type: 'hybrid'
+            } as SearchResult;
+          }).sort((a, b) => (b.score || 0) - (a.score || 0));
+        }
       } catch (err) {
         console.error("[IntelligenceService] Hybrid search failed, falling back to Lite:", err);
       }

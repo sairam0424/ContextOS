@@ -4,9 +4,12 @@ import chokidar, { FSWatcher } from 'chokidar';
 import { workspaceRoot, ALLOWED_BUCKETS } from '../context.js';
 import { globalIndexer } from '../indexer.js';
 import { samplingService } from './sampling.js';
+import { validationService } from './validation.js';
+import { repairService } from './repair.js';
 
 export class WatchService extends EventEmitter {
     private watcher: FSWatcher | null = null;
+    private repairCount: Map<string, number> = new Map();
 
     /**
      * Starts watching the allowed buckets for changes.
@@ -55,6 +58,31 @@ export class WatchService extends EventEmitter {
         try {
             console.log(`📝 Change detected: ${relativePath}`);
             if (ext === '.md') {
+                // Aether 2.0: Self-Healing Loop (Validation + Repair)
+                const { valid, issues } = await validationService.validateFile(filePath);
+                if (!valid) {
+                    const attempts = this.repairCount.get(relativePath) || 0;
+                    if (attempts < 3) {
+                        console.log(`⚠️ Validation failed for ${relativePath}: ${issues.join('; ')}`);
+                        this.repairCount.set(relativePath, attempts + 1);
+                        
+                        // Aether 2.1: Visual state tracking
+                        this.updateFileStatus(filePath, 'repairing');
+                        
+                        const fixed = await repairService.attemptRepair(filePath, issues);
+                        if (fixed) {
+                            console.log(`✨ Self-healing iteration ${attempts + 1} successful for ${relativePath}`);
+                            this.updateFileStatus(filePath, 'pending'); // Return to index queue
+                        } else {
+                            this.updateFileStatus(filePath, 'error');
+                        }
+                    } else {
+                        console.error(`🛑 Max repair attempts reached for ${relativePath}. Manual intervention required.`);
+                    }
+                } else {
+                    this.repairCount.delete(relativePath); // Reset on success
+                }
+                
                 await globalIndexer.indexFile(filePath);
             } else {
                 await globalIndexer.indexCodeFile(filePath);
@@ -76,6 +104,12 @@ export class WatchService extends EventEmitter {
         } catch (error) {
             console.error(`❌ Deletion error for ${relativePath}:`, error);
         }
+    }
+
+    private updateFileStatus(filePath: string, status: string) {
+        const relativePath = path.relative(workspaceRoot, filePath);
+        globalIndexer.getDatabase().updateDocumentStatus(relativePath, status);
+        this.emit('sync', { type: 'update', path: relativePath });
     }
 }
 

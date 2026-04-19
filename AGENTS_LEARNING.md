@@ -216,3 +216,45 @@ Treat this file as the primary handoff mechanism. If a task is interrupted, the 
 - **Mistake**: Adding a new export to `@context-os/core` but experiencing `TS2305` errors (no exported member) in dependent packages like CLI or MCP.
 - **Mitigation**: Always run `npm run build -w @context-os/core` after modifying core source code. Dependent packages consume the compiled `dist/` files, not the raw TypeScript source.
 - **Learning**: In a workspace setup, source changes are not "live" to other packages until the transpilation step (`tsc`) updates the distributed type definitions.
+
+---
+
+## Session Notes — 2026-04-18 (Protocol Aether v2.0 Research)
+
+### New Insights
+
+- **AST vs. Regex Gap**: Discovered that `indexer.ts` currently relies on brittle regex for symbol extraction, missing internal private methods and dependency usage patterns.
+- **Spatial RAG Pruning**: Current search is flat; implementing a graph-weighted similarity score (Distance-Weighted Retrieval) is essential for handling high-density knowledge meshes without information overload.
+- **Actionable HUD Surfaces**: The 3D Aether graph is currently "Read-Only." Transitioning to an interactive command-plane (Actionable Nodes) will unify visual navigation with task execution.
+- **Self-Healing Loop**: The Sentinel pattern can be extended from simple indexing to "Autonomous Correction" by hooking validation failures into repair agents.
+
+### Decisions
+
+- **Tree-Sitter Adoption**: Decided to replace regex indexing with Tree-Sitter for AST-level semantic accuracy in v2.0.
+- **Mission-Centric UX**: Standardized on "Missions" as state-managed objects in the graph to replace fragmented "Daily Logs."
+
+### Technical Debt Identified
+
+- **Dual-Write Risk**: `indexer.ts` still manually coordinates between SQLite and the JSON index; moving to a pure SQLite-driven state is the priority for v2.0.
+- **Static Bucket Limits**: The `ALLOWED_BUCKETS` are hardcoded in `context.ts`. This lacks the flexibility needed for multi-tenant or workspace-specific configurations.
+---
+
+## Session Notes — 2026-04-18 (ContextOS Aether Phase 4: Resilience & Intelligence)
+
+### New Insights
+
+- **Autonomous Self-Healing**: Implementing the **Janitor Agent** as a fallback for rule-based repair creates a resilient context layer. The LLM (Gemini 1.5 Pro) excels at reconstructing malformed frontmatter while preserving intent.
+- **Retrieval-Augmented Geometry (Spatial RAG)**: Boosting search results by graph affinity (connectedness to an anchor node) solves the relevance problem in high-density workspaces. It prioritizes "logical neighbors" over generic keyword matches.
+- **Safety Guardrails**: Autonomous LLM agents REQUIRE infinite-loop protection. A simple `repairCount` map with a hard cap (3 attempts) prevents runaway token usage and "flapping" states.
+- **HUD-as-Status-Broadcaster**: Propagating `repairing` and `error` states to the HUD visual layer is critical for trust. Seeing a yellow "pulse" for a self-healing file makes autonomous actions feel safe and observable.
+
+### Decisions
+
+- **Affinity Weighting**: Decided on a `(1 + affinity)` multiplier for Spatial RAG. This ensures connectivity boosts scores significantly without drowning out high-quality semantic matches.
+- **Sentinel Status Updates**: The Sentinel now explicitly manages the `intelligence_status` in the database, ensuring the UI remains in sync with background processes.
+
+### Technical Debt Identified
+
+- **Token Budgeting**: The Janitor Agent lacks a `REPAIR_BUDGET` (token count tracking). Sustained failures in large files could lead to high operational costs.
+- **Multi-Hop Affinities**: The current `getAffinities` only calculates 1st-degree connections. Implementing a fast decay-based BFS would enable "Knowledge Halo" expansion in search.
+- **Manual HUD Triggers**: While visual states are present, the UI lacks right-click handlers for "Force Repair" or "Assign to Mission" (deferred to Phase 5).
