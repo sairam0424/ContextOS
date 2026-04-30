@@ -1,0 +1,32 @@
+name: 🧪 Validate ContextOS
+
+on:
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔍 Checkout PR
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 📦 Install
+        run: npm install
+
+      - name: 🔄 Sync Assets
+        run: npm run sync:assets
+
+      - name: 🏗️ Build
+        run: npm run build
+
+      - name: 🧪 Test
+        run: npm run test
+
+      - name: ✅ Validate Project Integrity
+        run: npm run validate:all

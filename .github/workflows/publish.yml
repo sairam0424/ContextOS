@@ -1,0 +1,49 @@
+name: 📦 Publish ContextOS
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: 🔍 Checkout PR
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 📦 Install
+        run: npm install
+
+      - name: 🔄 Sync Assets
+        run: npm run sync:assets
+
+      - name: 🏗️ Build
+        run: npm run build
+
+      - name: 🧪 Test
+        run: npm run test
+
+      - name: 🚀 Publish Core
+        run: npm publish -w packages/core --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 🚀 Publish CLI
+        run: npm publish -w @context-os/cli --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 🚀 Publish MCP
+        run: npm publish -w @context-os/mcp --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

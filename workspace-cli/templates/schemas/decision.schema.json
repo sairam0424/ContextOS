@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ContextOS Decision Schema",
+  "description": "Schema for project decisions.md files.",
+  "type": "object",
+  "properties": {
+    "Decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["Id", "Title", "Date", "Status", "Context", "Decision", "Rationale"],
+        "properties": {
+          "Id": { "type": "string", "pattern": "^ADR-\\d{4}$" },
+          "Title": { "type": "string" },
+          "Date": { "type": "string", "format": "date" },
+          "Status": { "type": "string", "enum": ["Proposed", "Accepted", "Superseded", "Deprecated"] },
+          "Context": { "type": "string" },
+          "Decision": { "type": "string" },
+          "Rationale": { "type": "string" }
+        }
+      }
+    }
+  }
+}
