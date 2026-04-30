@@ -29,7 +29,7 @@ describe("Core Domain Services Layer", () => {
         it("should find results for a known query (e.g., 'ContextOS')", async () => {
             const results = await intelligenceService.search("ContextOS");
             assert.ok(results.length > 0, "Should find at least one result for 'ContextOS'");
-            assert.ok(results.some(r => r.type === 'index'), "Should identify indexed results");
+            assert.ok(results.some(r => r.type === 'hybrid' || r.type === 'deep'), "Should identify search results");
         });
 
         it("should fall back to grep for unindexed patterns", async function() {

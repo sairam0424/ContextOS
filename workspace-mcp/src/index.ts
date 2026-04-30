@@ -12,9 +12,10 @@ import { registerSamplingTool } from "./tools/sampling.js";
 import { registerResources } from "./resources.js";
 
 async function main() {
+  const { default: pkg } = await import("../package.json", { with: { type: "json" } });
   const server = new McpServer({
     name: "workspace-mcp",
-    version: "0.1.0",
+    version: pkg.version,
   });
 
   // Register all tools

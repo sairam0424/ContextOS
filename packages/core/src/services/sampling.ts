@@ -1,5 +1,4 @@
-import { DatabaseService } from "./database.js";
-import { getWorkspaceRoot } from "../context.js";
+import { DatabaseService, getSharedDatabase } from "./database.js";
 
 export interface WorkspacePulse {
     timestamp: number;
@@ -20,7 +19,7 @@ export class SamplingService {
     private CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
     constructor(dbService?: DatabaseService) {
-        this.dbService = dbService || new DatabaseService(getWorkspaceRoot());
+        this.dbService = dbService || getSharedDatabase();
     }
 
     /**

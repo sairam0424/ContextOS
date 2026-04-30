@@ -55,7 +55,7 @@ export function validatePath(requestedPath: string) {
 export function isReadOnly(filePath: string): boolean {
   const { fullPath } = validatePath(filePath);
   
-  const readOnlyBuckets = ["knowledge", "schemas", "root"];
+  const readOnlyBuckets = ["knowledge", "schemas", "root", "packages", "workspace-cli", "workspace-mcp", "workspace-dashboard"];
   return readOnlyBuckets.some(bucket => {
     const bucketRoot = path.join(workspaceRoot, bucket);
     const bucketRelative = path.relative(bucketRoot, fullPath);

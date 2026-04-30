@@ -1,6 +1,6 @@
 {
   "name": "@context-os/mcp",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "Model Context Protocol server for ContextOS integration",
   "type": "module",
   "publishConfig": {
@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",
-    "@context-os/core": "1.11.0"
+    "@context-os/core": "1.12.0"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",

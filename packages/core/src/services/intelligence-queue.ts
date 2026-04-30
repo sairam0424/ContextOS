@@ -1,6 +1,5 @@
-import { DatabaseService } from './database.js';
+import { DatabaseService, getSharedDatabase } from './database.js';
 import { EmbeddingService } from './embedding.js';
-import { workspaceRoot } from '../context.js';
 
 export class IntelligenceQueueService {
     private dbService: DatabaseService;
@@ -8,8 +7,8 @@ export class IntelligenceQueueService {
     private isRunning: boolean = false;
     private interval: NodeJS.Timeout | null = null;
 
-    constructor() {
-        this.dbService = new DatabaseService(workspaceRoot);
+    constructor(db?: DatabaseService) {
+        this.dbService = db || getSharedDatabase();
         const geminiKey = process.env.GEMINI_API_KEY;
         this.embeddingService = new EmbeddingService(geminiKey);
     }
@@ -36,7 +35,7 @@ export class IntelligenceQueueService {
             // Set status to processing
             this.dbService.setIntelligenceStatus(item.doc_id, 'processing');
             
-            const doc = this.dbService.getAllDocuments().find(d => d.id === item.doc_id);
+            const doc = this.dbService.getDocumentById(item.doc_id);
             if (!doc) {
                 this.dbService.removeFromQueue(item.id);
                 return;

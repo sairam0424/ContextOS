@@ -8,11 +8,12 @@ export function registerSearchTool(server: McpServer) {
     "workspace_search",
     {
       query: z.string().describe("Search query string"),
-      deep: z.boolean().optional().describe("Force deep scan using grep")
+      deep: z.boolean().optional().describe("Force deep scan using grep"),
+      anchor: z.string().optional().describe("Anchor node path for Spatial RAG graph-boosted results")
     },
-    async ({ query, deep }) => {
+    async ({ query, deep, anchor }) => {
       try {
-        const results = await intelligenceService.search(query, { deep });
+        const results = await intelligenceService.search(query, { deep, anchorNode: anchor });
 
         if (results.length === 0) {
           return {
@@ -21,7 +22,7 @@ export function registerSearchTool(server: McpServer) {
         }
 
         const formattedResults = results.map(res => {
-          const typeTag = res.type === 'index' ? '[Index]' : '[Deep]';
+          const typeTag = res.type === 'hybrid' ? '[Hybrid]' : '[Deep]';
           let output = `${typeTag} ${res.path}\n`;
           if (res.title && res.title !== 'Deep Scan Result') {
             output += `Title: ${res.title} ${res.tags.length ? `[${res.tags.join(', ')}]` : ''}\n`;

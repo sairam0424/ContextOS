@@ -1,5 +1,4 @@
-import { DatabaseService } from "./database.js";
-import { getWorkspaceRoot } from "../context.js";
+import { DatabaseService, getSharedDatabase } from "./database.js";
 
 export interface GraphNode {
     id: string; // filePath or symbol:name
@@ -24,7 +23,7 @@ export class KnowledgeGraphService {
     private dbService: DatabaseService;
 
     constructor(dbService?: DatabaseService) {
-        this.dbService = dbService || new DatabaseService(getWorkspaceRoot());
+        this.dbService = dbService || getSharedDatabase();
     }
 
     /**

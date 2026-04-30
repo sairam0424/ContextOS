@@ -2,9 +2,10 @@ import { Command } from "commander";
 import chalk from "chalk";
 import http from "node:http";
 import fs from "node:fs";
+import { createReadStream } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { WebSocketServer } from "ws";
 import { samplingService, knowledgeGraphService, watchService, lockingService } from "@context-os/core";
 
@@ -37,8 +38,8 @@ export function dashboardCommand(program: Command) {
       const server = http.createServer(async (req, res) => {
         const url = req.url || "/";
 
-        // CORS for development
-        res.setHeader("Access-Control-Allow-Origin", "*");
+        // CORS restricted to dashboard origin
+        res.setHeader("Access-Control-Allow-Origin", `http://localhost:${port}`);
         res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
 
         if (req.method === "OPTIONS") {
@@ -60,28 +61,51 @@ export function dashboardCommand(program: Command) {
         }
 
         if (url === "/api/telemetry/focus" && req.method === "POST") {
+          const MAX_BODY = 4096;
           let body = "";
-          req.on("data", chunk => body += chunk);
+          let overflow = false;
+          req.on("data", chunk => {
+            body += chunk;
+            if (body.length > MAX_BODY) { overflow = true; req.destroy(); }
+          });
           req.on("end", () => {
-             const { id } = JSON.parse(body);
-             console.log(chalk.yellow(`  - Spatial Focus: ${id}`));
-             wss.clients.forEach(client => {
-               if (client.readyState === 1) {
-                 client.send(JSON.stringify({ type: "agent_focus", id }));
+             if (overflow) { res.writeHead(413); return res.end("Payload too large"); }
+             try {
+               const { id } = JSON.parse(body);
+               if (typeof id !== "string" || id.length > 500) {
+                 res.writeHead(400); return res.end("Invalid id");
                }
-             });
-             res.writeHead(200);
-             res.end("OK");
+               console.log(chalk.yellow(`  - Spatial Focus: ${id}`));
+               wss.clients.forEach(client => {
+                 if (client.readyState === 1) {
+                   client.send(JSON.stringify({ type: "agent_focus", id }));
+                 }
+               });
+               res.writeHead(200);
+               res.end("OK");
+             } catch {
+               res.writeHead(400);
+               res.end("Invalid JSON");
+             }
           });
           return;
         }
 
-        // Static Assets Serving
-        let filePath = path.join(dashboardDist, url === "/" ? "index.html" : url);
-        
+        // Static Assets Serving — path traversal protection
+        const safePath = path.normalize(url).replace(/^(\.\.(\/|\\|$))+/, '');
+        let filePath = path.join(dashboardDist, safePath === "/" ? "index.html" : safePath);
+        const resolvedPath = path.resolve(filePath);
+
+        if (!resolvedPath.startsWith(dashboardDist)) {
+          res.writeHead(403);
+          return res.end("Forbidden");
+        }
+
         // SPA Fallback: if file doesn't exist, serve index.html
-        if (!fs.existsSync(filePath)) {
+        if (!fs.existsSync(resolvedPath)) {
           filePath = path.join(dashboardDist, "index.html");
+        } else {
+          filePath = resolvedPath;
         }
 
         if (fs.existsSync(filePath)) {
@@ -95,7 +119,7 @@ export function dashboardCommand(program: Command) {
             ".svg": "image/svg+xml"
           };
           res.writeHead(200, { "Content-Type": contentTypes[ext] || "text/plain" });
-          return res.end(fs.readFileSync(filePath));
+          return createReadStream(filePath).pipe(res);
         }
 
         res.writeHead(404);
@@ -117,36 +141,41 @@ export function dashboardCommand(program: Command) {
 
         ws.on("message", async (data) => {
           try {
-            const message = JSON.parse(data.toString());
+            const raw = data.toString();
+            if (raw.length > 8192) return;
+            const message = JSON.parse(raw);
             if (message.type === "action") {
               const { action, payload } = message;
+              if (typeof action !== "string" || !payload || typeof payload !== "object") return;
               console.log(chalk.bold.magenta(`  - HUD Action: ${action}`), payload);
 
+              const isValidStr = (v: unknown): v is string => typeof v === "string" && v.length < 500;
               const db = knowledgeGraphService['dbService'];
 
               switch (action) {
                 case "link_nodes":
-                  db.upsertEdge(payload.source, payload.target, "manual", 1.0);
+                  if (isValidStr(payload.source) && isValidStr(payload.target))
+                    db.upsertEdge(payload.source, payload.target, "manual", 1.0);
                   break;
                 case "unlink_nodes":
-                  db.removeEdge(payload.source, payload.target, payload.type);
+                  if (isValidStr(payload.source) && isValidStr(payload.target) && isValidStr(payload.type))
+                    db.removeEdge(payload.source, payload.target, payload.type);
                   break;
                 case "pulse_node":
-                  const doc = db.getDocumentByPath(payload.id);
-                  if (doc && doc.id) {
-                    db.addToQueue(doc.id, 10); // High priority
+                  if (isValidStr(payload.id)) {
+                    const doc = db.getDocumentByPath(payload.id);
+                    if (doc && doc.id) {
+                      db.addToQueue(doc.id, 10);
+                    }
                   }
                   break;
                 case "request_lock":
-                  await lockingService.acquire(payload.path, payload.agentId || 'human');
+                  if (isValidStr(payload.path))
+                    await lockingService.acquire(payload.path, isValidStr(payload.agentId) ? payload.agentId : 'human');
                   break;
                 case "release_lock":
-                  await lockingService.release(payload.path, payload.agentId || 'human');
-                  break;
-                case "fix_lint":
-                  console.log(chalk.blue(`  - HUD Action: Running lint fix on ${payload.path}`));
-                  // Placeholder for actual lint command execution
-                  // In a real scenario, this would spawn 'npm run lint -- --fix path'
+                  if (isValidStr(payload.path))
+                    await lockingService.release(payload.path, isValidStr(payload.agentId) ? payload.agentId : 'human');
                   break;
               }
 
@@ -202,7 +231,7 @@ export function dashboardCommand(program: Command) {
 
         // Launch Browser
         const start = (process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open');
-        exec(`${start} ${dashboardUrl}`);
+        execFile(start, [dashboardUrl]);
       });
     });
 }

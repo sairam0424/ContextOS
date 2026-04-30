@@ -6,7 +6,7 @@ import TypeScript from 'tree-sitter-typescript';
 import Python from 'tree-sitter-python';
 import { workspaceRoot, ALLOWED_BUCKETS } from './context.js';
 import { validationService } from './services/validation.js';
-import { DatabaseService, DBRecord } from './services/database.js';
+import { DatabaseService, DBRecord, getSharedDatabase } from './services/database.js';
 import { EmbeddingService } from './services/embedding.js';
 
 export interface IndexRecord {
@@ -25,9 +25,8 @@ export class ContextIndexer {
     private dbService: DatabaseService;
     private embeddingService: EmbeddingService;
 
-    constructor() {
-        this.dbService = new DatabaseService(workspaceRoot);
-        // Load API key if present for Elite mode
+    constructor(db?: DatabaseService) {
+        this.dbService = db || getSharedDatabase();
         const geminiKey = process.env.GEMINI_API_KEY;
         this.embeddingService = new EmbeddingService(geminiKey);
     }
@@ -227,7 +226,8 @@ export class ContextIndexer {
      * Public method to remove a file from all index layers.
      */
     public async removeFile(relativePath: string): Promise<void> {
-        // SQLite Cleanup
+        this.dbService.removeEdgesForSource(relativePath);
+        this.dbService.removeSymbolsForPath(relativePath);
         this.dbService.removeDocument(relativePath);
     }
 
@@ -268,7 +268,7 @@ export class ContextIndexer {
             return {
                 path: relativePath,
                 title,
-                tags: metadata.tags || [],
+                tags,
                 status: metadata.status || 'active',
                 lastModified: mtimeMs,
                 excerpt,
@@ -283,12 +283,18 @@ export class ContextIndexer {
     }
 
     /**
-     * Searches the local index using SQLite FTS5.
+     * Searches the local index using SQLite FTS5 + optional semantic vectors.
      */
     async search(query: string): Promise<IndexRecord[]> {
-        const records = this.dbService.searchHybrid(new Float32Array(0), query, 20);
-        // Map hybrid results back to IndexRecord
-        return records.keywordResults.map((r: any) => ({
+        let queryEmbedding: Float32Array;
+        try {
+            queryEmbedding = await this.embeddingService.generate(query);
+        } catch {
+            queryEmbedding = new Float32Array(0);
+        }
+
+        const records = this.dbService.searchHybrid(queryEmbedding, query, 20);
+        return records.combined.map((r: any) => ({
             path: r.path,
             title: r.title,
             excerpt: r.excerpt,

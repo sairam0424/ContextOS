@@ -148,6 +148,18 @@ export class DatabaseService {
         timestamp INTEGER
       );
     `);
+
+    this.migrateSchema();
+  }
+
+  private migrateSchema() {
+    const docCols = new Set((this.db.pragma('table_info(documents)') as any[]).map((c: any) => c.name));
+    if (!docCols.has('status')) this.db.exec(`ALTER TABLE documents ADD COLUMN status TEXT DEFAULT 'active'`);
+    if (!docCols.has('is_private')) this.db.exec(`ALTER TABLE documents ADD COLUMN is_private INTEGER DEFAULT 0`);
+    if (!docCols.has('intelligence_status')) this.db.exec(`ALTER TABLE documents ADD COLUMN intelligence_status TEXT DEFAULT 'pending'`);
+
+    const symCols = new Set((this.db.pragma('table_info(symbols)') as any[]).map((c: any) => c.name));
+    if (!symCols.has('hash')) this.db.exec(`ALTER TABLE symbols ADD COLUMN hash TEXT DEFAULT ''`);
   }
 
   public upsertEdge(source: string, target: string, type: string, weight: number) {
@@ -184,7 +196,7 @@ export class DatabaseService {
    */
   public getAffinities(nodePath: string): Map<string, number> {
     const affinities = new Map<string, number>();
-    
+
     // 1st Degree: Direct Links (Weight: 1.0x)
     const direct = this.db.prepare(`
       SELECT target as id, weight FROM edges WHERE source = ?
@@ -194,6 +206,22 @@ export class DatabaseService {
 
     for (const d of direct) {
       affinities.set(d.id, (affinities.get(d.id) || 0) + d.weight);
+    }
+
+    // 2nd Degree: Two-hop neighbors (Weight: 0.3x decay)
+    const firstDegreeIds = Array.from(affinities.keys());
+    for (const neighborId of firstDegreeIds) {
+      const secondDegree = this.db.prepare(`
+        SELECT target as id, weight FROM edges WHERE source = ? AND target != ?
+        UNION ALL
+        SELECT source as id, weight FROM edges WHERE target = ? AND source != ?
+      `).all(neighborId, nodePath, neighborId, nodePath) as any[];
+
+      for (const s of secondDegree) {
+        if (s.id !== nodePath && !affinities.has(s.id)) {
+          affinities.set(s.id, s.weight * 0.3);
+        }
+      }
     }
 
     return affinities;
@@ -271,34 +299,49 @@ export class DatabaseService {
 
   public searchHybrid(queryEmbedding: Float32Array, queryText: string, limit: number = 10, includePrivate: boolean = false) {
     const privateFilter = includePrivate ? "" : "AND d.is_private = 0";
-    
-    // 1. Semantic Search
-    const semanticStmt = this.db.prepare(`
-      SELECT 
-        d.id, d.path, d.title, d.excerpt, d.metadata, d.is_private,
-        vec_distance_cosine(v.embedding, ?) as distance
-      FROM vec_documents v
-      JOIN documents d ON v.id = d.id
-      WHERE d.status = 'active' ${privateFilter}
-      ORDER BY distance ASC
-      LIMIT ?
-    `);
-    
-    const semanticResults = semanticStmt.all(Buffer.from(queryEmbedding.buffer), limit * 2) as any[];
 
-    // 2. Keyword Search (FTS5)
-    const keywordStmt = this.db.prepare(`
-      SELECT 
-        d.id, d.path, d.title, d.excerpt, d.metadata, d.is_private,
-        rank as fts_score
-      FROM fts_documents f
-      JOIN documents d ON f.rowid = d.id
-      WHERE fts_documents MATCH ? AND d.status = 'active' ${privateFilter}
-      ORDER BY rank
-      LIMIT ?
-    `);
-    
-    const keywordResults = keywordStmt.all(queryText, limit * 2) as any[];
+    // 1. Semantic Search — skip if no valid query embedding
+    let semanticResults: any[] = [];
+    if (queryEmbedding.length > 0) {
+      try {
+        const semanticStmt = this.db.prepare(`
+          SELECT
+            d.id, d.path, d.title, d.excerpt, d.metadata, d.is_private,
+            vec_distance_cosine(v.embedding, ?) as distance
+          FROM vec_documents v
+          JOIN documents d ON v.id = d.id
+          WHERE d.status = 'active' ${privateFilter}
+          ORDER BY distance ASC
+          LIMIT ?
+        `);
+
+        semanticResults = semanticStmt.all(Buffer.from(queryEmbedding.buffer), limit * 2) as any[];
+      } catch {
+        semanticResults = [];
+      }
+    }
+
+    // 2. Keyword Search (FTS5) — quote input to prevent operator injection
+    let keywordResults: any[] = [];
+    const sanitizedFts = queryText.replace(/"/g, '""').trim();
+    if (sanitizedFts) {
+      try {
+        const keywordStmt = this.db.prepare(`
+          SELECT
+            d.id, d.path, d.title, d.excerpt, d.metadata, d.is_private,
+            rank as fts_score
+          FROM fts_documents f
+          JOIN documents d ON f.rowid = d.id
+          WHERE fts_documents MATCH ? AND d.status = 'active' ${privateFilter}
+          ORDER BY rank
+          LIMIT ?
+        `);
+
+        keywordResults = keywordStmt.all(`"${sanitizedFts}"`, limit * 2) as any[];
+      } catch {
+        keywordResults = [];
+      }
+    }
 
     // 3. Aether 2.0: Distance-Weighted Fusion
     const seen = new Map<string, any>();
@@ -328,6 +371,10 @@ export class DatabaseService {
       .slice(0, limit);
 
     return { semanticResults, keywordResults, combined };
+  }
+
+  public getDocumentById(id: number) {
+    return this.db.prepare('SELECT * FROM documents WHERE id = ?').get(id) as DBRecord | undefined;
   }
 
   public getDocumentByPath(filePath: string) {
@@ -454,10 +501,25 @@ export class DatabaseService {
     return (stmt.get(path, since) as any).count;
   }
 
+  public pruneAccessLog(maxAgeMs: number = 86400000) {
+    const cutoff = Date.now() - maxAgeMs;
+    return this.db.prepare('DELETE FROM access_log WHERE timestamp < ?').run(cutoff);
+  }
+
   public close() {
     this.db.close();
   }
 }
 
 import { getWorkspaceRoot } from '../context.js';
-export const databaseService = new DatabaseService(getWorkspaceRoot());
+
+let _sharedInstance: DatabaseService | null = null;
+
+export function getSharedDatabase(): DatabaseService {
+  if (!_sharedInstance) {
+    _sharedInstance = new DatabaseService(getWorkspaceRoot());
+  }
+  return _sharedInstance;
+}
+
+export const databaseService = getSharedDatabase();
