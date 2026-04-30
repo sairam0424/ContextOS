@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BrainCircuit, Zap, Radio, Info, X, Copy, MousePointer2, Wifi, WifiOff } from 'lucide-react';
 import AetherGraph from './components/AetherGraph';
+import ErrorBoundary from './components/ErrorBoundary';
 import type { PulseData, NodeData, GraphData } from './types.ts';
 
 function App() {
@@ -10,45 +11,74 @@ function App() {
   const [ticker, setTicker] = useState("AETHER CORE: OFFLINE. STANDBY.");
   const [isConnected, setIsConnected] = useState(false);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
-  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const graphDataRef = useRef(graphData);
+  const reconnectDelay = useRef(1000);
+
+  // Keep ref in sync to avoid stale closures in WebSocket handler
+  useEffect(() => {
+    graphDataRef.current = graphData;
+  }, [graphData]);
 
   useEffect(() => {
-    const socket = new WebSocket(`ws://${window.location.host}`);
+    let cancelled = false;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
 
-    socket.onopen = () => {
-      setIsConnected(true);
-      setTicker("AETHER CORE: LINK ESTABLISHED. MONITORING PULSE.");
-    };
+    function doConnect() {
+      if (cancelled) return;
+      const ws = new WebSocket(`ws://${window.location.host}`);
 
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      
-      if (message.type === 'init' || message.type === 'sync') {
-        setPulse(message.data.pulse);
-        setGraphData(message.data.graph);
-        
-        if (message.event && message.type === 'sync') {
-          setTicker(`SIGNAL DETECTED: [${message.event.type.toUpperCase()}] ${message.event.path}`);
+      ws.onopen = () => {
+        setIsConnected(true);
+        setTicker("AETHER CORE: LINK ESTABLISHED. MONITORING PULSE.");
+        reconnectDelay.current = 1000;
+      };
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+
+        if (message.type === 'init' || message.type === 'sync') {
+          setPulse(message.data.pulse);
+          setGraphData(message.data.graph);
+
+          if (message.event && message.type === 'sync') {
+            setTicker(`SIGNAL DETECTED: [${message.event.type.toUpperCase()}] ${message.event.path}`);
+          }
         }
-      }
 
-      if (message.type === 'agent_focus') {
-        setFocusedNodeId(message.id);
-        const node = graphData.nodes.find(n => n.id === message.id);
-        if (node) {
-          setTicker(`AGENT FOCUS: INVESTIGATING [${node.label}]`);
+        if (message.type === 'agent_focus') {
+          setFocusedNodeId(message.id);
+          const node = graphDataRef.current.nodes.find(n => n.id === message.id);
+          if (node) {
+            setTicker(`AGENT FOCUS: INVESTIGATING [${node.label}]`);
+          }
         }
-      }
-    };
-    
-    setSocket(socket);
+      };
 
-    socket.onclose = () => {
-      setIsConnected(false);
-      setTicker("AETHER CORE: LINK SEVERED. ATTEMPTING RECONNECT...");
-    };
+      ws.onclose = () => {
+        setIsConnected(false);
+        socketRef.current = null;
+        if (!cancelled) {
+          const delay = reconnectDelay.current;
+          setTicker(`AETHER CORE: LINK SEVERED. RECONNECTING IN ${delay / 1000}s...`);
+          reconnectDelay.current = Math.min(delay * 2, 30000);
+          reconnectTimer = setTimeout(doConnect, delay);
+        }
+      };
 
-    return () => socket.close();
+      ws.onerror = () => {
+        ws.close();
+      };
+
+      socketRef.current = ws;
+    }
+
+    doConnect();
+    return () => {
+      cancelled = true;
+      clearTimeout(reconnectTimer);
+      socketRef.current?.close();
+    };
   }, []);
 
   const copyPath = (path: string) => {
@@ -61,11 +91,13 @@ function App() {
     <div className="relative w-screen h-screen overflow-hidden">
       {/* 3D Graph Layer */}
       <div className="absolute inset-0 z-0">
-        <AetherGraph 
-          onNodeClick={setSelectedNode} 
-          graphData={graphData} 
-          focusedNodeId={focusedNodeId}
-        />
+        <ErrorBoundary>
+          <AetherGraph
+            onNodeClick={setSelectedNode}
+            graphData={graphData}
+            focusedNodeId={focusedNodeId}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* UI Overlay */}
@@ -148,11 +180,11 @@ function App() {
               </div>
             </div>
             <div className="mt-4 h-1 bg-white/5 rounded-full overflow-hidden">
-               <div 
-                 className="h-full bg-primary transition-all duration-1000" 
-                 style={{ 
-                   width: `${pulse ? (pulse.intelligenceStatus.ready / (pulse.intelligenceStatus.ready + pulse.intelligenceStatus.pending + pulse.intelligenceStatus.processing || 1)) * 100 : 0}%` 
-                 }} 
+               <div
+                 className="h-full bg-primary transition-all duration-1000"
+                 style={{
+                   width: `${pulse ? (pulse.intelligenceStatus.ready / Math.max(pulse.intelligenceStatus.ready + pulse.intelligenceStatus.pending + pulse.intelligenceStatus.processing, 1)) * 100 : 0}%`
+                 }}
                />
             </div>
           </div>
@@ -207,8 +239,8 @@ function App() {
                   <div className="flex gap-2">
                     <span className="px-3 py-1 border border-primary text-primary text-[10px] rounded-full">Type: {selectedNode.type}</span>
                     <span className={`px-3 py-1 border text-[10px] rounded-full ${
-                      selectedNode.metadata?.intelligenceStatus === 'ready' 
-                        ? 'border-secondary text-secondary' 
+                      selectedNode.metadata?.intelligenceStatus === 'ready'
+                        ? 'border-secondary text-secondary'
                         : selectedNode.metadata?.intelligenceStatus === 'processing'
                         ? 'border-primary text-primary animate-pulse'
                         : 'border-white/20 text-white/50'
@@ -219,15 +251,15 @@ function App() {
                </div>
 
                <div className="grid grid-cols-2 gap-2 mt-2">
-                 <button 
+                 <button
                   onClick={() => copyPath(selectedNode.id)}
                   className="glass p-3 text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-white/5 transition-colors border-none"
                  >
                    <Copy size={12} /> Copy
                  </button>
-                 <button 
+                 <button
                   onClick={() => {
-                    socket?.send(JSON.stringify({ type: 'action', action: 'pulse_node', payload: { id: selectedNode.id } }));
+                    socketRef.current?.send(JSON.stringify({ type: 'action', action: 'pulse_node', payload: { id: selectedNode.id } }));
                     setTicker(`AETHER ACTION: TRIGGERING FORCE PULSE [${selectedNode.label}]`);
                   }}
                   className="glass p-3 text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-primary/10 transition-colors border-none text-primary"
@@ -239,10 +271,9 @@ function App() {
                {selectedNode.type === 'document' && (
                  <div className="mt-4">
                     <div className="font-display text-[9px] uppercase text-primary tracking-[2px] opacity-60 mb-3">Nexus Actions</div>
-                    <button 
+                    <button
                       className="w-full text-[10px] p-4 glass bg-primary/5 hover:bg-primary/10 text-primary border-primary/20 flex items-center justify-between group transition-all"
                       onClick={() => {
-                        // In a real app we'd open a dialog to select another node
                         setTicker("SYSTEM: SELECT TARGET NODE TO BRIDGE...");
                       }}
                     >
@@ -273,14 +304,14 @@ function App() {
           </div>
 
           <div className="glass py-2 px-4 pointer-events-auto font-display text-[10px] tracking-[1px]">
-            DECK: <span className="text-primary">V1.10.0-NEXUS-CORE</span>
+            DECK: <span className="text-primary">V1.12.0-NEXUS</span>
           </div>
         </footer>
       </div>
-      
+
       <style>{`
         .grid-areas-hud {
-          grid-template-areas: 
+          grid-template-areas:
             "header header header"
             "sidebar content inspector"
             "footer footer footer";
