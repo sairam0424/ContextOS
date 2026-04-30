@@ -1,6 +1,6 @@
 {
   "name": "@context-os/core",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "Shared intelligence layer, schemas, and security buckets for ContextOS",
   "type": "module",
   "main": "dist/index.js",
@@ -30,7 +30,6 @@
     "front-matter": "^4.0.2",
     "fs-extra": "^11.2.0",
     "js-yaml": "^3.14.2",
-    "minisearch": "^7.2.0",
     "sqlite-vec": "^0.1.9",
     "tree-sitter": "^0.21.1",
     "tree-sitter-python": "^0.25.0",
