@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import chokidar, { FSWatcher } from 'chokidar';
 import { workspaceRoot, ALLOWED_BUCKETS } from '../context.js';
 import { globalIndexer } from '../indexer.js';
+import { getSharedDatabase } from './database.js';
 import { samplingService } from './sampling.js';
 import { validationService } from './validation.js';
 import { repairService } from './repair.js';
@@ -10,6 +11,8 @@ import { repairService } from './repair.js';
 export class WatchService extends EventEmitter {
     private watcher: FSWatcher | null = null;
     private repairCount: Map<string, number> = new Map();
+    private repairing = new Set<string>();
+    private pruneInterval: NodeJS.Timeout | null = null;
 
     /**
      * Starts watching the allowed buckets for changes.
@@ -36,6 +39,12 @@ export class WatchService extends EventEmitter {
             .on('error', (error: any) => console.error(`[Sentinel] Watch Error: ${error}`));
 
         console.log(`  - Monitoring buckets: ${ALLOWED_BUCKETS.join(', ')}`);
+
+        // Prune stale access log entries on startup and hourly
+        getSharedDatabase().pruneAccessLog();
+        this.pruneInterval = setInterval(() => {
+            getSharedDatabase().pruneAccessLog();
+        }, 3600000);
     }
 
     /**
@@ -46,14 +55,19 @@ export class WatchService extends EventEmitter {
             this.watcher.close();
             this.watcher = null;
         }
+        if (this.pruneInterval) {
+            clearInterval(this.pruneInterval);
+            this.pruneInterval = null;
+        }
         console.log('🛑 Sentinel stopped.');
     }
 
     private async handleEvent(filePath: string) {
         const ext = path.extname(filePath);
         if (!['.md', '.ts', '.tsx', '.py'].includes(ext)) return;
-        
+
         const relativePath = path.relative(workspaceRoot, filePath);
+        if (this.repairing.has(relativePath)) return;
         
         try {
             console.log(`📝 Change detected: ${relativePath}`);
@@ -68,11 +82,13 @@ export class WatchService extends EventEmitter {
                         
                         // Aether 2.1: Visual state tracking
                         this.updateFileStatus(filePath, 'repairing');
-                        
+                        this.repairing.add(relativePath);
+
                         const fixed = await repairService.attemptRepair(filePath, issues);
+                        this.repairing.delete(relativePath);
                         if (fixed) {
                             console.log(`✨ Self-healing iteration ${attempts + 1} successful for ${relativePath}`);
-                            this.updateFileStatus(filePath, 'pending'); // Return to index queue
+                            this.updateFileStatus(filePath, 'pending');
                         } else {
                             this.updateFileStatus(filePath, 'error');
                         }
