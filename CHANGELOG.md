@@ -2,6 +2,29 @@
 
 All notable changes to the ContextOS platform will be documented in this file.
 
+## [1.12.0] - 2026-04-30 — "Nexus Consolidation"
+
+### Fixed
+- **Database Singleton**: All services now share a single SQLite connection, fixing embedding isolation bug where intelligence queue writes were invisible to search.
+- **Search Pipeline**: Semantic search generates real query embeddings instead of passing empty vectors; returns fused results instead of keyword-only.
+- **Command Injection (CVE-class)**: Grep fallback switched from `exec` to `execFile`, preventing shell injection via MCP search tool.
+- **Tag Extraction**: Body tags (#hashtags) now correctly merged with frontmatter tags in index records.
+- **Dashboard Reconnection**: WebSocket auto-reconnects with exponential backoff (1s → 30s max).
+- **Stale Closure**: Dashboard `onmessage` handler reads from ref instead of stale render-scope variable.
+- **Schema Migration**: Existing databases with missing columns now self-heal on startup via `ALTER TABLE`.
+
+### Changed
+- **MiniSearch Removed**: FTS5 is the sole keyword search engine (removed redundant in-memory index and `minisearch` dependency).
+- **Access Log Pruning**: Sentinel prunes stale access records on startup and hourly (24h TTL).
+- **2nd-Degree Affinity**: Spatial RAG considers two-hop graph neighbors with 0.3x decay weighting.
+- **Streaming Static Files**: Dashboard server uses `createReadStream().pipe()` instead of blocking `readFileSync`.
+- **Search Result Types**: Unified to `'hybrid' | 'deep'` (removed `'index'` and `'semantic'` variants).
+
+### Added
+- **Spatial RAG in MCP**: `workspace_search` tool accepts `anchor` parameter for graph-boosted retrieval.
+- **Error Boundary**: Three.js crashes no longer take down the entire Aether dashboard.
+- **Test Coverage**: 5 new test suites — locking, knowledge graph, intelligence queue, repair, capabilities (24 tests total for new suites).
+
 ## [1.11.0] - 2026-04-19
 
 ### Added

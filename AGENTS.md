@@ -1,50 +1,74 @@
-# 📡 ContextOS: Spatial HUD Protocol (Aether)
+# Repository Guidelines
 
-You are operating within the **ContextOS Nexus Edition (v1.10.0)**. This workspace is a live Spatial Intelligence target.
+ContextOS is a TypeScript monorepo (Turborepo) providing an intelligence layer for AI agents. It publishes three npm packages and a private dashboard app.
 
-## 🕹️ HUD Maintenance Rules
+## Project Structure & Module Organization
 
-Every action you take reflects on the **Aether Visual Dashboard**. To maintain system integrity:
+Four workspaces under one root:
 
-1. **Status Accuracy**: Use the `context-os status` command or update the `status` field in `context.md` to reflect active missions.
-2. **Metadata Sync**: Ensure all markdown files contain valid Frontmatter. The Aether 3D Graph depends on `tags` and `priority` to render correctly.
-3. **The Sentinel**: A background watch service (`context-os watch`) is active. Your changes will be indexed in real-time. Do not perform large bulk-writes without pausing to allow the indexer to catch up.
+- **`packages/core`** (`@context-os/core`) — Shared intelligence: SQLite indexer, vector search (sqlite-vec), ML embeddings (@xenova/transformers), tree-sitter code parsing, schema validation (Ajv).
+- **`workspace-cli`** (`@context-os/cli`) — Terminal interface (`context-os` binary). Commands live in `src/commands/`. Uses Commander, Chalk, Ora.
+- **`workspace-mcp`** (`@context-os/mcp`) — Model Context Protocol server (`context-os-mcp` binary). MCP tools in `src/tools/`.
+- **`workspace-dashboard`** (private) — React 19 + Vite + Tailwind v4 + Three.js spatial visualization (Aether HUD). Not published.
 
-## 🧩 Workspace Context
-- **Root**: `/Users/sairamugge/Desktop/ContextOS/`
-- **Soul**: `root/soul.md` (Read-only for mission guidance)
-- **Personality**: `root/personality.md` (Operational constraints)
+Build order: Core -> CLI/MCP/Dashboard (Turbo handles dependency graph via `^build`).
 
-## 🔄 Double-Hook Lifecycle
+## Build, Test, and Development Commands
 
-1. **Pre-Task Hook**: Read `AGENTS_LEARNING.md` to avoid recursive failure patterns.
-2. **Post-Task Hook**: Update `AGENTS_LEARNING.md` with new architectural discoveries or technical debt identified.
+```bash
+npm run build          # Turbo: tsc for core/cli/mcp, tsc+vite for dashboard
+npm run test           # Turbo: mocha (core/cli/mcp only)
+npm run validate       # Turbo: build + workspace-specific validation (uncached)
+npm run sync:assets    # Copy templates to dist
+npm run link:all       # Build + npm link cli and mcp for local dev
+```
 
----
+Per-workspace:
 
-## Session Notes — 2026-04-10 (Aether Release v1.6.1)
+```bash
+cd workspace-dashboard && npm run dev      # Vite dev server
+cd workspace-dashboard && npm run lint     # ESLint (dashboard only)
+cd workspace-cli && npm run watch          # tsc watch mode
+cd workspace-mcp && npm run watch          # tsc watch mode
+```
 
-### New Insights
+Run a single test file:
 
-- **Spatial Intelligence**: Transitioning from a list-based view to a 3D Knowledge Graph (Aether HUD) significantly improves the ability of agents to detect context silos and orphaned files.
-- **The Sentinel Pattern**: Transitioning from manual indexing to a background `watch` service (Sentinel) prevents "Stale Intelligence" where an agent reads an ADR that was just overwritten.
-- **Dependency Version Pinning**: In a monorepo, version drifts (e.g., CLI at 1.5.0 but Core at 1.6.1) cause silent failures in domain logic. Fixed via Turbo-sync and manual manifest audit.
+```bash
+cd packages/core && npx mocha dist/tests/some-file.test.js
+```
 
-### Decisions
+## Coding Style & Naming Conventions
 
-- **Aether Visual Dashboard**: Adopted `3d-force-graph` with Glassmorphism aesthetic for the primary control interface.
-- **Unified Binary Name**: Standardized on `context-os` as the global binary name for better branding and recognition.
-- **NPM Distribution Strategy**: Implemented sequential publication (Core -> CLI -> MCP) with `sudo chown` as the documented fix for Mac permission blockers.
+- **ESM only** — all packages use `"type": "module"` with `NodeNext` module resolution.
+- **TypeScript strict mode** — `"strict": true` across all tsconfigs. Target: `ESNext`.
+- **ESLint** — configured for the dashboard only (`eslint.config.js`): `typescript-eslint`, `react-hooks`, `react-refresh`.
+- **No shared formatter config** — Prettier is referenced in `.cursorrules` (`npx prettier --write .`) but has no dotfile.
 
-### Mistakes & Mitigations
+## Testing Guidelines
 
-- **Mistake**: The CLI `bin` mapping in `package.json` used `./dist/index.js`, which NPM flagged as invalid during global install.
-- **Mitigation**: Switched to canonical `dist/index.js` path mapping.
-- **Mistake**: Permission `EPERM` error when publishing from Mac due to root-owned cache files.
-- **Mitigation**: Documented the definitive `sudo chown -R $(whoami) ~/.npm` fix in `docs/publishing.md`.
-- **Mistake**: Aether graph failed to render metadata for files missing H2 headers.
-- **Mitigation**: Upgraded the `IntelligenceService` to support fallback H1 matching for document titles.
+- **Framework**: Mocha + Chai (core, cli, mcp).
+- Tests must compile first — they live in `src/tests/` as `.ts` and run from `dist/tests/` after build.
+- The dashboard has no test suite.
 
----
+## Version & Release Protocol
 
-*Identity: Antigravity v1.6.1 (Aether)*
+**Strict version parity**: all four `package.json` files (root, core, cli, mcp) must share the same version. CLI and MCP also pin `@context-os/core` to the exact version.
+
+Publish order (CI and manual): **Core -> CLI -> MCP** (sequential). Triggered by pushing a `v*` tag. CI runs on Node 22.
+
+## Git Hooks & CI
+
+- **Husky pre-commit + pre-push**: both run `npm run validate` (full build + workspace checks).
+- **GitHub Actions**: PR validation (`validate.yml`) and tag-based npm publish (`publish.yml`).
+
+## Commit Conventions
+
+Conventional commits with scoped prefixes:
+
+```text
+feat(dashboard): description
+fix(core): description
+chore: description
+docs: description
+```

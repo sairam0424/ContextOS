@@ -8,7 +8,7 @@ export function watchCommand(program: Command) {
     .command("watch")
     .description("Start real-time workspace monitoring and intelligence sync")
     .action(async () => {
-      console.log(chalk.bold.cyan("\n📡 ContextOS Intelligence Monitor v1.5.0"));
+      console.log(chalk.bold.cyan("\n📡 ContextOS Intelligence Monitor v1.12.0"));
       console.log(chalk.dim("Press Ctrl+C to stop monitoring\n"));
 
       const spinner = ora("Initializing workspace sweep...").start();
