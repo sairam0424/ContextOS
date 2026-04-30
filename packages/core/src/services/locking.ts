@@ -9,15 +9,13 @@ export class LockingService {
    * Returns true if successful, false if already locked by another agent.
    */
   public async acquire(filePath: string, agentId: string): Promise<boolean> {
-    const result = this.db.acquireLock(filePath, agentId);
-    if (result.changes > 0) {
+    this.db.acquireLock(filePath, agentId);
+    const lock = this.db.getLock(filePath);
+    if (lock?.agent_id === agentId) {
       this.db.logAccess(filePath, 'focus');
       return true;
     }
-    
-    // Double check if we own it (in case of update)
-    const lock = this.db.getLock(filePath);
-    return lock?.agent_id === agentId;
+    return false;
   }
 
   /**
