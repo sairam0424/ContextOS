@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { getWorkspaceRoot } from "../context.js";
 import { DatabaseService, getSharedDatabase } from "./database.js";
-import { EmbeddingService } from "./embedding.js";
+import { EmbeddingService, getSharedEmbeddingService } from "./embedding.js";
 import { capabilityService } from "./capability.js";
 
 const execFileAsync = promisify(execFile);
@@ -23,10 +23,10 @@ export class IntelligenceService {
   /**
    * Hybrid Search: Semantic (sqlite-vec) + Keyword (FTS5) -> Grep Fallback
    */
-  async search(query: string, options: { deep?: boolean, includePrivate?: boolean, anchorNode?: string } = {}): Promise<SearchResult[]> {
+  async search(query: string, options: { deep?: boolean, includePrivate?: boolean, anchorNode?: string, limit?: number, offset?: number } = {}): Promise<SearchResult[]> {
     if (!options.deep) {
       if (!this.dbService) this.dbService = getSharedDatabase();
-      if (!this.embeddingService) this.embeddingService = new EmbeddingService(process.env.GEMINI_API_KEY);
+      if (!this.embeddingService) this.embeddingService = getSharedEmbeddingService();
 
       try {
         let queryEmbedding: Float32Array;
@@ -36,7 +36,7 @@ export class IntelligenceService {
           queryEmbedding = new Float32Array(0);
         }
 
-        const { combined } = this.dbService.searchHybrid(queryEmbedding, query, 10, options.includePrivate);
+        const { combined } = this.dbService.searchHybrid(queryEmbedding, query, options.limit ?? 10, options.includePrivate, options.offset ?? 0);
 
         const capability = capabilityService.match(query);
         console.log(`[Swarm] Matched capability: ${capability.role} for query: ${query}`);
@@ -67,6 +67,7 @@ export class IntelligenceService {
     }
 
     // Fallback: Grep (uses execFile to prevent shell injection)
+    if (!this.dbService) this.dbService = getSharedDatabase();
     const workspaceRoot = getWorkspaceRoot();
     try {
       const { stdout } = await execFileAsync('grep', ['-rnIF', '--', query, '.'], {
@@ -87,8 +88,14 @@ export class IntelligenceService {
             title: 'Deep Scan Result',
             tags: [],
             excerpt: content,
-            type: 'deep'
+            type: 'deep' as const
           };
+        })
+        .filter((result) => {
+          // Privacy filter: exclude private docs unless explicitly requested (bug B4)
+          if (options.includePrivate) return true;
+          const doc = this.dbService?.getDocumentByPath(result.path) as any;
+          return !doc?.is_private;
         });
     } catch (error: any) {
       if (error.code === 1 || error.status === 1) return [];

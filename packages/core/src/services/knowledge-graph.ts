@@ -21,6 +21,7 @@ export interface WorkspaceGraph {
 
 export class KnowledgeGraphService {
     private dbService: DatabaseService;
+    private cache: { graph: WorkspaceGraph; version: number } | null = null;
 
     constructor(dbService?: DatabaseService) {
         this.dbService = dbService || getSharedDatabase();
@@ -28,27 +29,47 @@ export class KnowledgeGraphService {
 
     /**
      * Builds a unified graph of the workspace.
-     * Combines explicit links (@mentions, #tags) and semantic bridges.
+     * Returns an in-memory cached result when the graph version is unchanged (O(1) on idle workspaces).
      */
     async getGraph(): Promise<WorkspaceGraph> {
+        const currentVersion = this.dbService.getGraphVersion();
+        if (this.cache && this.cache.version === currentVersion) {
+            return this.cache.graph;
+        }
         const nodes: GraphNode[] = [];
         const seenNodes = new Set<string>();
+        const bucketsSeen = new Set<string>();
 
         // 1. Load all documents from the database
         const docs = this.dbService.getAllDocuments();
 
         for (const doc of docs) {
+            // Derive bucket from first path segment for AetherGraph clustering (bug B6)
+            const bucketId = doc.path.split('/')[0] || 'root';
+
+            // Emit a bucket node once per distinct bucket
+            if (!bucketsSeen.has(bucketId)) {
+                nodes.push({
+                    id: `bucket:${bucketId}`,
+                    label: bucketId,
+                    type: 'bucket' as any,
+                    metadata: { val: 50 }
+                });
+                bucketsSeen.add(bucketId);
+            }
+
             // Add Document Node
             if (!seenNodes.has(doc.path)) {
                 nodes.push({
                     id: doc.path,
                     label: doc.title,
                     type: 'document',
-                    metadata: { 
+                    metadata: {
                         excerpt: doc.excerpt,
                         intelligenceStatus: doc.intelligence_status || 'pending',
                         heat: this.dbService.getPathHeat(doc.path),
-                        lock: this.dbService.getLock(doc.path)
+                        lock: this.dbService.getLock(doc.path),
+                        bucketId: `bucket:${bucketId}`
                     }
                 });
                 seenNodes.add(doc.path);
@@ -103,7 +124,26 @@ export class KnowledgeGraphService {
             }
         }
 
-        // 5. Add virtual nodes for tags or documents that might be missing (e.g. from edges)
+        // 5. Emit mission nodes (v2.0) — activates orange dodecahedra in the HUD
+        const missions = this.dbService.getAllMissions();
+        for (const mission of missions) {
+            const missionId = `mission:${mission.path}`;
+            if (!seenNodes.has(missionId)) {
+                nodes.push({
+                    id: missionId,
+                    label: mission.title,
+                    type: 'mission' as any,
+                    metadata: { status: mission.status, priority: mission.priority, path: mission.path }
+                });
+                seenNodes.add(missionId);
+                // Edge linking mission to its owning document if it exists
+                if (seenNodes.has(mission.path)) {
+                    edges.push({ source: missionId, target: mission.path, type: 'contains', weight: 1.0 });
+                }
+            }
+        }
+
+        // 6. Add virtual nodes for tags or documents that might be missing (e.g. from edges)
         edges.forEach(edge => {
             if (edge.type === 'tag' && !seenNodes.has(edge.target)) {
                 nodes.push({
@@ -127,7 +167,9 @@ export class KnowledgeGraphService {
             }
         });
 
-        return { nodes, edges };
+        const graph = { nodes, edges };
+        this.cache = { graph, version: currentVersion };
+        return graph;
     }
 }
 

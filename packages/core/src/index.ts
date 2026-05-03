@@ -14,6 +14,9 @@ export * from './services/watch.js';
 export * from './services/intelligence-queue.js';
 export * from './services/database.js';
 export * from './services/locking.js';
+export * from './services/workspace-config.js';
+export * from './services/mission.js';
+export * from './services/federation.js';
 
 /**
  * Validates that a path is within the workspace root and inside an allowed bucket.

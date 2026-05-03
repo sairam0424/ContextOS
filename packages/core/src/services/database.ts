@@ -149,6 +149,28 @@ export class DatabaseService {
       );
     `);
 
+    // 11. Workspace Config (v2.0 — dynamic settings)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS workspace_config (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
+    `);
+
+    // 12. Missions (v2.0 — structured objectives)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS missions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        path TEXT UNIQUE,
+        title TEXT NOT NULL,
+        status TEXT DEFAULT 'active',
+        priority INTEGER DEFAULT 1,
+        created_at INTEGER,
+        due_at INTEGER,
+        metadata TEXT
+      );
+    `);
+
     this.migrateSchema();
   }
 
@@ -160,6 +182,27 @@ export class DatabaseService {
 
     const symCols = new Set((this.db.pragma('table_info(symbols)') as any[]).map((c: any) => c.name));
     if (!symCols.has('hash')) this.db.exec(`ALTER TABLE symbols ADD COLUMN hash TEXT DEFAULT ''`);
+
+    // v1.13: vector dimension tracking (bug B1)
+    const vecCols = new Set((this.db.pragma('table_info(vec_documents)') as any[]).map((c: any) => c.name));
+    if (!vecCols.has('dimension')) this.db.exec(`ALTER TABLE vec_documents ADD COLUMN dimension INTEGER NOT NULL DEFAULT 0`);
+
+    // v1.13: intelligence queue retry / dead-letter (bug B5)
+    const qCols = new Set((this.db.pragma('table_info(intelligence_queue)') as any[]).map((c: any) => c.name));
+    if (!qCols.has('retry_count')) this.db.exec(`ALTER TABLE intelligence_queue ADD COLUMN retry_count INTEGER DEFAULT 0`);
+    if (!qCols.has('last_error')) this.db.exec(`ALTER TABLE intelligence_queue ADD COLUMN last_error TEXT`);
+  }
+
+  public getGraphVersion(): number {
+    const row = this.db.prepare(`SELECT value FROM graph_metadata WHERE key = 'graph_version'`).get() as { value: string } | undefined;
+    return row ? parseInt(row.value, 10) : 0;
+  }
+
+  private bumpGraphVersion() {
+    this.db.prepare(`
+      INSERT INTO graph_metadata (key, value) VALUES ('graph_version', '1')
+      ON CONFLICT(key) DO UPDATE SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT)
+    `).run();
   }
 
   public upsertEdge(source: string, target: string, type: string, weight: number) {
@@ -168,7 +211,9 @@ export class DatabaseService {
       VALUES (?, ?, ?, ?)
       ON CONFLICT(source, target, type) DO UPDATE SET weight = excluded.weight
     `);
-    return stmt.run(source, target, type, weight);
+    const result = stmt.run(source, target, type, weight);
+    this.bumpGraphVersion();
+    return result;
   }
 
   public removeEdgesForSource(source: string) {
@@ -192,38 +237,28 @@ export class DatabaseService {
 
   /**
    * Fetches graph affinity scores for nodes connected to the given path.
-   * Phase 4: Multi-degree connection weighting.
+   * Uses a recursive CTE for configurable multi-hop BFS with exponential decay.
+   * Single DB round-trip; cycles are pruned by the minWeight termination condition.
    */
-  public getAffinities(nodePath: string): Map<string, number> {
-    const affinities = new Map<string, number>();
-
-    // 1st Degree: Direct Links (Weight: 1.0x)
-    const direct = this.db.prepare(`
-      SELECT target as id, weight FROM edges WHERE source = ?
-      UNION ALL
-      SELECT source as id, weight FROM edges WHERE target = ?
-    `).all(nodePath, nodePath) as any[];
-
-    for (const d of direct) {
-      affinities.set(d.id, (affinities.get(d.id) || 0) + d.weight);
-    }
-
-    // 2nd Degree: Two-hop neighbors (Weight: 0.3x decay)
-    const firstDegreeIds = Array.from(affinities.keys());
-    for (const neighborId of firstDegreeIds) {
-      const secondDegree = this.db.prepare(`
-        SELECT target as id, weight FROM edges WHERE source = ? AND target != ?
+  public getAffinities(nodePath: string, maxHops = 3, minWeight = 0.05): Map<string, number> {
+    const rows = this.db.prepare(`
+      WITH RECURSIVE traversal(id, weight, depth) AS (
+        SELECT target, weight, 1 FROM edges WHERE source = ?
         UNION ALL
-        SELECT source as id, weight FROM edges WHERE target = ? AND source != ?
-      `).all(neighborId, nodePath, neighborId, nodePath) as any[];
+        SELECT source, weight, 1 FROM edges WHERE target = ?
+        UNION ALL
+        SELECT e.target, t.weight * 0.4, t.depth + 1
+        FROM edges e
+        JOIN traversal t ON e.source = t.id
+        WHERE t.depth < ? AND t.weight * 0.4 > ?
+      )
+      SELECT id, MAX(weight) AS affinity FROM traversal WHERE id != ? GROUP BY id
+    `).all(nodePath, nodePath, maxHops, minWeight, nodePath) as Array<{ id: string; affinity: number }>;
 
-      for (const s of secondDegree) {
-        if (s.id !== nodePath && !affinities.has(s.id)) {
-          affinities.set(s.id, s.weight * 0.3);
-        }
-      }
+    const affinities = new Map<string, number>();
+    for (const row of rows) {
+      affinities.set(row.id, row.affinity);
     }
-
     return affinities;
   }
 
@@ -243,12 +278,14 @@ export class DatabaseService {
       RETURNING id
     `);
     
-    return stmt.get({
+    const row = stmt.get({
       status: 'active',
       is_private: 0,
       intelligence_status: 'pending',
       ...record
     }) as { id: number };
+    this.bumpGraphVersion();
+    return row;
   }
 
   public updateDocumentStatus(path: string, status: string) {
@@ -258,16 +295,17 @@ export class DatabaseService {
 
   public upsertVector(docId: number, embedding: Float32Array, provider: string) {
     const stmt = this.db.prepare(`
-      INSERT INTO vec_documents (id, embedding, provider)
-      VALUES (?, ?, ?)
+      INSERT INTO vec_documents (id, embedding, provider, dimension)
+      VALUES (?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         embedding = excluded.embedding,
-        provider = excluded.provider
+        provider = excluded.provider,
+        dimension = excluded.dimension
     `);
-    
+
     // sqlite-vec expects raw buffer
     this.db.prepare('UPDATE documents SET intelligence_status = "ready" WHERE id = ?').run(docId);
-    return stmt.run(docId, Buffer.from(embedding.buffer), provider);
+    return stmt.run(docId, Buffer.from(embedding.buffer), provider, embedding.length);
   }
 
   // --- Queue Methods ---
@@ -283,39 +321,59 @@ export class DatabaseService {
 
   public getNextFromQueue(): { id: number, doc_id: number } | undefined {
     return this.db.prepare(`
-      SELECT id, doc_id FROM intelligence_queue 
-      ORDER BY priority DESC, created_at ASC 
+      SELECT id, doc_id FROM intelligence_queue
+      ORDER BY priority DESC, created_at ASC
       LIMIT 1
     `).get() as any;
+  }
+
+  public getBatchFromQueue(n: number): Array<{ id: number; doc_id: number }> {
+    return this.db.prepare(`
+      SELECT id, doc_id FROM intelligence_queue
+      ORDER BY priority DESC, created_at ASC
+      LIMIT ?
+    `).all(n) as any[];
   }
 
   public removeFromQueue(id: number) {
     return this.db.prepare('DELETE FROM intelligence_queue WHERE id = ?').run(id);
   }
 
-  public setIntelligenceStatus(docId: number, status: 'pending' | 'processing' | 'ready') {
+  public incrementQueueRetry(id: number, errorMsg: string) {
+    return this.db.prepare(`
+      UPDATE intelligence_queue SET retry_count = retry_count + 1, last_error = ? WHERE id = ?
+    `).run(errorMsg, id);
+  }
+
+  public getQueueItemRetryCount(id: number): number {
+    const row = this.db.prepare('SELECT retry_count FROM intelligence_queue WHERE id = ?').get(id) as any;
+    return row?.retry_count ?? 0;
+  }
+
+  public setIntelligenceStatus(docId: number, status: 'pending' | 'processing' | 'ready' | 'failed') {
     return this.db.prepare('UPDATE documents SET intelligence_status = ? WHERE id = ?').run(status, docId);
   }
 
-  public searchHybrid(queryEmbedding: Float32Array, queryText: string, limit: number = 10, includePrivate: boolean = false) {
+  public searchHybrid(queryEmbedding: Float32Array, queryText: string, limit: number = 10, includePrivate: boolean = false, offset: number = 0) {
     const privateFilter = includePrivate ? "" : "AND d.is_private = 0";
 
     // 1. Semantic Search — skip if no valid query embedding
     let semanticResults: any[] = [];
     if (queryEmbedding.length > 0) {
       try {
+        // Only compare vectors with matching dimensions to prevent garbage cosine scores (bug B1)
         const semanticStmt = this.db.prepare(`
           SELECT
             d.id, d.path, d.title, d.excerpt, d.metadata, d.is_private,
             vec_distance_cosine(v.embedding, ?) as distance
           FROM vec_documents v
           JOIN documents d ON v.id = d.id
-          WHERE d.status = 'active' ${privateFilter}
+          WHERE d.status = 'active' AND v.dimension = ? ${privateFilter}
           ORDER BY distance ASC
           LIMIT ?
         `);
 
-        semanticResults = semanticStmt.all(Buffer.from(queryEmbedding.buffer), limit * 2) as any[];
+        semanticResults = semanticStmt.all(Buffer.from(queryEmbedding.buffer), queryEmbedding.length, limit * 2) as any[];
       } catch {
         semanticResults = [];
       }
@@ -368,7 +426,7 @@ export class DatabaseService {
 
     const combined = Array.from(seen.values())
       .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+      .slice(offset, offset + limit);
 
     return { semanticResults, keywordResults, combined };
   }
@@ -400,7 +458,9 @@ export class DatabaseService {
         signature = excluded.signature,
         hash = excluded.hash
     `);
-    return stmt.run(name, path, line, type, signature, hash);
+    const result = stmt.run(name, path, line, type, signature, hash);
+    this.bumpGraphVersion();
+    return result;
   }
 
   public removeSymbolsForPath(filePath: string) {
@@ -504,6 +564,49 @@ export class DatabaseService {
   public pruneAccessLog(maxAgeMs: number = 86400000) {
     const cutoff = Date.now() - maxAgeMs;
     return this.db.prepare('DELETE FROM access_log WHERE timestamp < ?').run(cutoff);
+  }
+
+  // --- Mission Methods ---
+
+  public createMission(title: string, path: string, priority = 1, dueAt?: number, metadata?: string): { id: number } {
+    const stmt = this.db.prepare(`
+      INSERT INTO missions (title, path, status, priority, created_at, due_at, metadata)
+      VALUES (?, ?, 'active', ?, ?, ?, ?)
+      ON CONFLICT(path) DO UPDATE SET title = excluded.title, status = excluded.status, priority = excluded.priority
+      RETURNING id
+    `);
+    this.bumpGraphVersion();
+    return stmt.get(title, path, priority, Date.now(), dueAt ?? null, metadata ?? null) as { id: number };
+  }
+
+  public listMissions(status?: string): any[] {
+    if (status) {
+      return this.db.prepare('SELECT * FROM missions WHERE status = ? ORDER BY priority DESC, created_at DESC').all(status) as any[];
+    }
+    return this.db.prepare('SELECT * FROM missions ORDER BY priority DESC, created_at DESC').all() as any[];
+  }
+
+  public updateMissionStatus(path: string, status: string): void {
+    this.db.prepare('UPDATE missions SET status = ? WHERE path = ?').run(status, path);
+    this.bumpGraphVersion();
+  }
+
+  public getAllMissions(): any[] {
+    return this.db.prepare('SELECT * FROM missions').all() as any[];
+  }
+
+  // --- Workspace Config Methods ---
+
+  public getConfig(key: string): string | undefined {
+    const row = this.db.prepare('SELECT value FROM workspace_config WHERE key = ?').get(key) as { value: string } | undefined;
+    return row?.value;
+  }
+
+  public setConfig(key: string, value: string): void {
+    this.db.prepare(`
+      INSERT INTO workspace_config (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(key, value);
   }
 
   public close() {

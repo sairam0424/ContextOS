@@ -1,7 +1,19 @@
 import fs from "fs-extra";
 import path from "path";
+import { workspaceConfigService } from "./workspace-config.js";
 
 export class SelfRepairService {
+  private repairCallsThisHour = 0;
+  private hourlyResetTimer: NodeJS.Timeout;
+
+  constructor() {
+    // Reset call counter every hour to enforce hourly budget
+    this.hourlyResetTimer = setInterval(() => {
+      this.repairCallsThisHour = 0;
+    }, 3600000);
+    this.hourlyResetTimer.unref(); // Don't keep process alive
+  }
+
   /**
    * Attempts to repair a file if it fails validation.
    * Focuses on structurally normalizing the file so it meets ContextOS schema requirements.
@@ -65,10 +77,19 @@ export class SelfRepairService {
 
   /**
    * Spawns a Janitor Agent to reconstruct malformed context files.
+   * Enforces hourly call budget and per-call token cap from workspace_config.
    */
   private async agentRepair(filePath: string, content: string, issues: string[]): Promise<string> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error("GEMINI_API_KEY missing for agentic repair.");
+
+    const maxRepairsPerHour = workspaceConfigService.getNumber('janitor.maxRepairsPerHour', 20);
+    if (this.repairCallsThisHour >= maxRepairsPerHour) {
+      throw new Error(`Janitor Agent budget exhausted: ${this.repairCallsThisHour}/${maxRepairsPerHour} repairs this hour. Skipping to prevent runaway API spend.`);
+    }
+    this.repairCallsThisHour++;
+
+    const maxOutputTokens = workspaceConfigService.getNumber('janitor.maxOutputTokens', 1024);
 
     const MAX_CONTENT = 8000;
     const truncated = content.length > MAX_CONTENT ? content.slice(0, MAX_CONTENT) + '\n[TRUNCATED]' : content;
@@ -98,7 +119,7 @@ export class SelfRepairService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.1 }
+            generationConfig: { temperature: 0.1, maxOutputTokens }
         })
     });
 

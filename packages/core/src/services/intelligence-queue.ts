@@ -1,22 +1,24 @@
 import { DatabaseService, getSharedDatabase } from './database.js';
-import { EmbeddingService } from './embedding.js';
+import { EmbeddingService, getSharedEmbeddingService } from './embedding.js';
 
 export class IntelligenceQueueService {
     private dbService: DatabaseService;
     private embeddingService: EmbeddingService;
     private isRunning: boolean = false;
     private interval: NodeJS.Timeout | null = null;
+    private batchSize: number = 5;
 
-    constructor(db?: DatabaseService) {
+    constructor(db?: DatabaseService, embeddingService?: EmbeddingService) {
         this.dbService = db || getSharedDatabase();
-        const geminiKey = process.env.GEMINI_API_KEY;
-        this.embeddingService = new EmbeddingService(geminiKey);
+        this.embeddingService = embeddingService || getSharedEmbeddingService();
     }
 
-    public start(intervalMs: number = 2000) {
+    public start(options: { intervalMs?: number; batchSize?: number } = {}) {
         if (this.isRunning) return;
         this.isRunning = true;
-        this.interval = setInterval(() => this.processNext(), intervalMs);
+        const { intervalMs = 2000, batchSize = 5 } = options;
+        this.batchSize = batchSize;
+        this.interval = setInterval(() => this.processBatch(), intervalMs);
     }
 
     public stop() {
@@ -27,35 +29,43 @@ export class IntelligenceQueueService {
         this.isRunning = false;
     }
 
-    private async processNext() {
-        const item = this.dbService.getNextFromQueue();
-        if (!item) return;
+    private async processBatch() {
+        const items = this.dbService.getBatchFromQueue(this.batchSize);
+        if (items.length === 0) return;
 
+        await Promise.allSettled(items.map(item => this.processItem(item)));
+    }
+
+    private async processItem(item: { id: number; doc_id: number }) {
         try {
-            // Set status to processing
             this.dbService.setIntelligenceStatus(item.doc_id, 'processing');
-            
+
             const doc = this.dbService.getDocumentById(item.doc_id);
             if (!doc) {
                 this.dbService.removeFromQueue(item.id);
                 return;
             }
 
-            // Generate Embedding
             const textToEmbed = `${doc.title}\n${doc.excerpt}\n${doc.content}`;
             const embedding = await this.embeddingService.generate(textToEmbed);
-            
-            // Sync SQLite
+
             this.dbService.upsertVector(item.doc_id, embedding, await this.embeddingService.getProviderName());
-            
-            // Remove from queue
             this.dbService.removeFromQueue(item.id);
-            
+
             console.log(`[Backbone] Intelligence Ready: ${doc.path}`);
         } catch (error) {
-            console.error(`[Backbone] Intelligence Failed for doc ${item.doc_id}:`, error);
-            // Re-queue with lower priority or just skip for now to avoid infinite loops
-            this.dbService.removeFromQueue(item.id);
+            const errMsg = error instanceof Error ? error.message : String(error);
+            this.dbService.incrementQueueRetry(item.id, errMsg);
+            const retries = this.dbService.getQueueItemRetryCount(item.id);
+
+            if (retries >= 3) {
+                console.error(`[Backbone] Max retries reached for doc ${item.doc_id}. Marking failed.`);
+                this.dbService.removeFromQueue(item.id);
+                this.dbService.setIntelligenceStatus(item.doc_id, 'failed');
+            } else {
+                console.warn(`[Backbone] Retry ${retries}/3 for doc ${item.doc_id}: ${errMsg}`);
+                this.dbService.setIntelligenceStatus(item.doc_id, 'pending');
+            }
         }
     }
 }

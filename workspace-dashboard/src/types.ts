@@ -1,8 +1,13 @@
+export interface LockRecord {
+  agent_id: string;
+  expires_at?: number;
+}
+
 export interface NodeData {
   id: string;
   label: string;
-  type: 'file' | 'tag' | 'mention' | 'symbol' | 'document' | 'entity' | 'mission';
-  val?: number; // size for force graph
+  type: 'file' | 'tag' | 'mention' | 'symbol' | 'document' | 'entity' | 'mission' | 'bucket';
+  val?: number;
   color?: string;
   metadata?: {
     excerpt?: string;
@@ -12,13 +17,15 @@ export interface NodeData {
     line?: number;
     symbolType?: string;
     signature?: string;
-    intelligenceStatus?: 'pending' | 'processing' | 'ready';
-    // Aether 2.0 Additions
+    intelligenceStatus?: 'pending' | 'processing' | 'ready' | 'failed' | 'repairing' | 'error';
+    // Aether 2.0+
     heat?: number;
-    lock?: boolean;
+    lock?: LockRecord | boolean;
     actions?: string[];
     status?: string;
     bucket?: string;
+    bucketId?: string;
+    is_private?: boolean;
   };
 }
 
