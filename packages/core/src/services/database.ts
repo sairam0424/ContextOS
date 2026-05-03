@@ -566,6 +566,17 @@ export class DatabaseService {
     return this.db.prepare('DELETE FROM access_log WHERE timestamp < ?').run(cutoff);
   }
 
+  public getAccessLog(limit = 50, pathFilter?: string): Array<{ id: number; path: string; action: string; timestamp: number }> {
+    if (pathFilter) {
+      return this.db.prepare(
+        'SELECT id, path, action, timestamp FROM access_log WHERE path = ? ORDER BY timestamp DESC LIMIT ?'
+      ).all(pathFilter, limit) as any[];
+    }
+    return this.db.prepare(
+      'SELECT id, path, action, timestamp FROM access_log ORDER BY timestamp DESC LIMIT ?'
+    ).all(limit) as any[];
+  }
+
   // --- Mission Methods ---
 
   public createMission(title: string, path: string, priority = 1, dueAt?: number, metadata?: string): { id: number } {

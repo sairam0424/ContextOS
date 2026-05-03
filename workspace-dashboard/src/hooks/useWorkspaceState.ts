@@ -1,6 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { PulseData, NodeData, GraphData } from '../types.js';
 
+export interface ContextMenuState {
+  node: NodeData;
+  x: number;
+  y: number;
+}
+
 export interface WorkspaceState {
   pulse: PulseData | null;
   graphData: GraphData;
@@ -9,6 +15,8 @@ export interface WorkspaceState {
   ticker: string;
   isConnected: boolean;
   filterQuery: string;
+  contextMenu: ContextMenuState | null;
+  showTimeline: boolean;
 }
 
 export interface WorkspaceActions {
@@ -17,6 +25,8 @@ export interface WorkspaceActions {
   setTicker: (msg: string, resetAfterMs?: number) => void;
   setIsConnected: (v: boolean) => void;
   handleMessage: (message: any) => void;
+  setContextMenu: (menu: ContextMenuState | null) => void;
+  setShowTimeline: (v: boolean | ((prev: boolean) => boolean)) => void;
 }
 
 export function useWorkspaceState(): WorkspaceState & WorkspaceActions {
@@ -27,6 +37,8 @@ export function useWorkspaceState(): WorkspaceState & WorkspaceActions {
   const [ticker, setTickerState] = useState("AETHER CORE: OFFLINE. STANDBY.");
   const [isConnected, setIsConnected] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [showTimeline, setShowTimeline] = useState(false);
   const graphDataRef = useRef(graphData);
   const tickerResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,6 +89,8 @@ export function useWorkspaceState(): WorkspaceState & WorkspaceActions {
 
   return {
     pulse, graphData, selectedNode, focusedNodeId, ticker, isConnected, filterQuery,
+    contextMenu, showTimeline,
     setSelectedNode, setFilterQuery, setTicker, setIsConnected, handleMessage,
+    setContextMenu, setShowTimeline,
   };
 }

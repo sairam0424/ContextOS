@@ -8,6 +8,8 @@ import HudSidebar from './components/HudSidebar';
 import HudFooter from './components/HudFooter';
 import NodeInspector from './components/NodeInspector';
 import GraphFilterBar from './components/GraphFilterBar';
+import ContextMenu from './components/ContextMenu';
+import TimelinePanel from './components/TimelinePanel';
 import type { NodeData } from './types.js';
 
 function App() {
@@ -20,12 +22,14 @@ function App() {
     }, [state.setIsConnected, state.setTicker]),
   });
 
-  // Filter graph nodes by query
   const visibleGraphData = useMemo(() => {
     const q = state.filterQuery.toLowerCase().trim();
     if (!q) return state.graphData;
-    const matchedIds = new Set(state.graphData.nodes.filter(n => n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)).map(n => n.id));
-    // Include nodes connected to a match
+    const matchedIds = new Set(
+      state.graphData.nodes
+        .filter(n => n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q))
+        .map(n => n.id)
+    );
     state.graphData.links.forEach((link: any) => {
       const s = typeof link.source === 'object' ? link.source.id : link.source;
       const t = typeof link.target === 'object' ? link.target.id : link.target;
@@ -57,12 +61,20 @@ function App() {
     state.setTicker(`NEXUS: ACQUIRING LOCK [${id}]`);
   };
 
+  const handleFilterToNode = (id: string) => {
+    state.setFilterQuery(id.split('/').pop() ?? id);
+  };
+
   return (
-    <div className="relative w-screen h-screen overflow-hidden">
+    <div
+      className="relative w-screen h-screen overflow-hidden"
+      onContextMenu={e => e.preventDefault()} // suppress browser context menu globally
+    >
       <div className="absolute inset-0 z-0">
         <ErrorBoundary>
           <AetherGraph
-            onNodeClick={(node: NodeData | null) => state.setSelectedNode(node)}
+            onNodeClick={(node: NodeData | null) => { state.setSelectedNode(node); state.setContextMenu(null); }}
+            onNodeRightClick={(node, x, y) => state.setContextMenu({ node, x, y })}
             graphData={visibleGraphData}
             focusedNodeId={state.focusedNodeId}
           />
@@ -81,8 +93,31 @@ function App() {
           onPulseNode={handlePulseNode}
           onAcquireLock={handleAcquireLock}
         />
-        <HudFooter ticker={state.ticker} />
+        <HudFooter
+          ticker={state.ticker}
+          onTimelineToggle={() => state.setShowTimeline(v => !v)}
+          showTimeline={state.showTimeline}
+        />
       </div>
+
+      {/* Context menu — rendered outside the grid so it's always on top */}
+      {state.contextMenu && (
+        <ContextMenu
+          node={state.contextMenu.node}
+          x={state.contextMenu.x}
+          y={state.contextMenu.y}
+          onClose={() => state.setContextMenu(null)}
+          onCopyPath={handleCopyPath}
+          onAcquireLock={handleAcquireLock}
+          onFilterToNode={handleFilterToNode}
+          onPulseNode={handlePulseNode}
+        />
+      )}
+
+      {/* Timeline panel */}
+      {state.showTimeline && (
+        <TimelinePanel onClose={() => state.setShowTimeline(false)} />
+      )}
 
       <style>{`
         .grid-areas-hud {
