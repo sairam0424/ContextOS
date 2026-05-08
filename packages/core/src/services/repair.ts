@@ -1,6 +1,9 @@
 import fs from "fs-extra";
 import path from "path";
 import { workspaceConfigService } from "./workspace-config.js";
+import { createChildLogger } from '../logger.js';
+
+const log = createChildLogger('repair');
 
 export class SelfRepairService {
   private repairCallsThisHour = 0;
@@ -19,7 +22,7 @@ export class SelfRepairService {
    * Focuses on structurally normalizing the file so it meets ContextOS schema requirements.
    */
   public async attemptRepair(filePath: string, issues: string[]): Promise<boolean> {
-    console.log(`🔧 Attempting autonomous repair for: ${filePath}`);
+    log.info({ filePath }, 'Attempting autonomous repair');
     
     try {
       const content = await fs.readFile(filePath, "utf-8");
@@ -42,11 +45,11 @@ export class SelfRepairService {
 
       // Agentic Fallback (Phase B)
       if (repairedContent === content) {
-        console.log(`🧠 Rule-based repair failed. Spawning Janitor Agent for ${filePath}...`);
+        log.info({ filePath }, 'Rule-based repair failed, spawning Janitor Agent');
         try {
           repairedContent = await this.agentRepair(filePath, content, issues);
         } catch (err) {
-          console.error(`❌ Janitor Agent failed:`, err);
+          log.error({ err }, 'Janitor Agent failed');
           return false;
         }
       }
@@ -60,16 +63,16 @@ export class SelfRepairService {
             ? repairedBody.split(' ').filter(w => originalBody.includes(w)).length / originalBody.split(' ').length
             : 0;
           if (similarity < 0.5) {
-            console.error(`🛑 Repair rejected: body content was significantly altered (possible prompt injection)`);
+            log.error({ filePath }, 'Repair rejected: body content significantly altered (possible prompt injection)');
             return false;
           }
         }
         await fs.writeFile(filePath, repairedContent, "utf-8");
-        console.log(`✅ Successfully repaired ${filePath}`);
+        log.info({ filePath }, 'Successfully repaired');
         return true;
       }
     } catch (error) {
-      console.error(`❌ Repair failed for ${filePath}:`, error);
+      log.error({ filePath, err: error }, 'Repair failed');
     }
 
     return false;

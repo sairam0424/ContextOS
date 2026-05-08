@@ -4,6 +4,9 @@ import { getWorkspaceRoot } from "../context.js";
 import { DatabaseService, getSharedDatabase } from "../database/index.js";
 import { EmbeddingService, getSharedEmbeddingService } from "./embedding.js";
 import { capabilityService } from "./capability.js";
+import { createChildLogger } from '../logger.js';
+
+const log = createChildLogger('intelligence');
 
 const execFileAsync = promisify(execFile);
 
@@ -39,7 +42,7 @@ export class IntelligenceService {
         const { combined } = this.dbService.searchHybrid(queryEmbedding, query, options.limit ?? 10, options.includePrivate, options.offset ?? 0);
 
         const capability = capabilityService.match(query);
-        console.log(`[Swarm] Matched capability: ${capability.role} for query: ${query}`);
+        log.info({ role: capability.role, query }, 'Matched capability');
 
         if (combined.length > 0) {
           const affinities = options.anchorNode ? this.dbService.getAffinities(options.anchorNode) : new Map<string, number>();
@@ -62,7 +65,7 @@ export class IntelligenceService {
           }).sort((a, b) => (b.score || 0) - (a.score || 0));
         }
       } catch (err) {
-        console.error("[IntelligenceService] Hybrid search failed, falling back to grep:", err);
+        log.error({ err }, 'Hybrid search failed, falling back to grep');
       }
     }
 

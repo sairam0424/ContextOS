@@ -7,6 +7,9 @@ import { getSharedDatabase } from '../database/index.js';
 import { samplingService } from './sampling.js';
 import { validationService } from './validation.js';
 import { repairService } from './repair.js';
+import { createChildLogger } from '../logger.js';
+
+const log = createChildLogger('watch');
 
 export class WatchService extends EventEmitter {
     private watcher: FSWatcher | null = null;
@@ -18,7 +21,7 @@ export class WatchService extends EventEmitter {
      * Starts watching the allowed buckets for changes.
      */
     public start() {
-        console.log('📡 Starting ContextOS Sentinel (Chokidar)...');
+        log.info('Starting ContextOS Sentinel');
 
         const pathsToWatch = ALLOWED_BUCKETS.map(bucket => path.join(workspaceRoot, bucket));
         
@@ -36,9 +39,9 @@ export class WatchService extends EventEmitter {
             .on('add', (filePath: string) => this.handleEvent(filePath))
             .on('change', (filePath: string) => this.handleEvent(filePath))
             .on('unlink', (filePath: string) => this.handleDeletion(filePath))
-            .on('error', (error: any) => console.error(`[Sentinel] Watch Error: ${error}`));
+            .on('error', (error: any) => log.error({ err: error }, 'Watch error'));
 
-        console.log(`  - Monitoring buckets: ${ALLOWED_BUCKETS.join(', ')}`);
+        log.info({ buckets: ALLOWED_BUCKETS }, 'Monitoring buckets');
 
         // Prune stale access log entries on startup and hourly
         getSharedDatabase().pruneAccessLog();
@@ -59,7 +62,7 @@ export class WatchService extends EventEmitter {
             clearInterval(this.pruneInterval);
             this.pruneInterval = null;
         }
-        console.log('🛑 Sentinel stopped.');
+        log.info('Sentinel stopped');
     }
 
     private async handleEvent(filePath: string) {
@@ -70,14 +73,14 @@ export class WatchService extends EventEmitter {
         if (this.repairing.has(relativePath)) return;
         
         try {
-            console.log(`📝 Change detected: ${relativePath}`);
+            log.info({ path: relativePath }, 'Change detected');
             if (ext === '.md') {
                 // Aether 2.0: Self-Healing Loop (Validation + Repair)
                 const { valid, issues } = await validationService.validateFile(filePath);
                 if (!valid) {
                     const attempts = this.repairCount.get(relativePath) || 0;
                     if (attempts < 3) {
-                        console.log(`⚠️ Validation failed for ${relativePath}: ${issues.join('; ')}`);
+                        log.warn({ path: relativePath, issues }, 'Validation failed');
                         this.repairCount.set(relativePath, attempts + 1);
                         
                         // Aether 2.1: Visual state tracking
@@ -87,13 +90,13 @@ export class WatchService extends EventEmitter {
                         const fixed = await repairService.attemptRepair(filePath, issues);
                         this.repairing.delete(relativePath);
                         if (fixed) {
-                            console.log(`✨ Self-healing iteration ${attempts + 1} successful for ${relativePath}`);
+                            log.info({ path: relativePath, attempt: attempts + 1 }, 'Self-healing successful');
                             this.updateFileStatus(filePath, 'pending');
                         } else {
                             this.updateFileStatus(filePath, 'error');
                         }
                     } else {
-                        console.error(`🛑 Max repair attempts reached for ${relativePath}. Manual intervention required.`);
+                        log.error({ path: relativePath }, 'Max repair attempts reached, manual intervention required');
                     }
                 } else {
                     this.repairCount.delete(relativePath); // Reset on success
@@ -106,19 +109,19 @@ export class WatchService extends EventEmitter {
             samplingService.flushCache();
             this.emit('sync', { type: 'update', path: relativePath });
         } catch (error) {
-            console.error(`❌ Watch error for ${relativePath}:`, error);
+            log.error({ path: relativePath, err: error }, 'Watch handler error');
         }
     }
 
     private async handleDeletion(filePath: string) {
         const relativePath = path.relative(workspaceRoot, filePath);
         try {
-            console.log(`🗑️ Deletion detected: ${relativePath}`);
+            log.info({ path: relativePath }, 'Deletion detected');
             await globalIndexer.removeFile(relativePath);
             samplingService.flushCache();
             this.emit('sync', { type: 'delete', path: relativePath });
         } catch (error) {
-            console.error(`❌ Deletion error for ${relativePath}:`, error);
+            log.error({ path: relativePath, err: error }, 'Deletion handler error');
         }
     }
 
