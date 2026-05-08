@@ -25,3 +25,48 @@ describe('Database Connection Module', function () {
     db.close();
   });
 });
+
+import { initializeSchema, migrateSchema } from '../database/schema.js';
+
+describe('Database Schema Module', function () {
+  this.timeout(10000);
+
+  it('creates all tables without error', () => {
+    fs.ensureDirSync(TEST_DIR);
+    const dbPath = path.join(TEST_DIR, 'schema-test.db');
+    const db = createConnection(dbPath);
+
+    initializeSchema(db);
+
+    const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[])
+      .map((r: any) => r.name)
+      .filter((n: string) => !n.startsWith('sqlite_'));
+
+    assert.ok(tables.includes('documents'), 'documents table exists');
+    assert.ok(tables.includes('vec_documents'), 'vec_documents table exists');
+    assert.ok(tables.includes('edges'), 'edges table exists');
+    assert.ok(tables.includes('symbols'), 'symbols table exists');
+    assert.ok(tables.includes('intelligence_queue'), 'intelligence_queue table exists');
+    assert.ok(tables.includes('locks'), 'locks table exists');
+    assert.ok(tables.includes('access_log'), 'access_log table exists');
+    assert.ok(tables.includes('workspace_config'), 'workspace_config table exists');
+    assert.ok(tables.includes('missions'), 'missions table exists');
+
+    db.close();
+  });
+
+  it('migrateSchema adds missing columns idempotently', () => {
+    fs.ensureDirSync(TEST_DIR);
+    const dbPath = path.join(TEST_DIR, 'migrate-test.db');
+    const db = createConnection(dbPath);
+
+    initializeSchema(db);
+    migrateSchema(db);
+    migrateSchema(db);
+
+    const vecCols = (db.pragma('table_info(vec_documents)') as any[]).map((c: any) => c.name);
+    assert.ok(vecCols.includes('dimension'), 'dimension column exists after migration');
+
+    db.close();
+  });
+});
