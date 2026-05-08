@@ -1,5 +1,8 @@
 import { DatabaseService, getSharedDatabase } from '../database/index.js';
 import { EmbeddingService, getSharedEmbeddingService } from './embedding.js';
+import { createChildLogger } from '../logger.js';
+
+const log = createChildLogger('intelligence-queue');
 
 export class IntelligenceQueueService {
     private dbService: DatabaseService;
@@ -52,18 +55,18 @@ export class IntelligenceQueueService {
             this.dbService.upsertVector(item.doc_id, embedding, await this.embeddingService.getProviderName());
             this.dbService.removeFromQueue(item.id);
 
-            console.log(`[Backbone] Intelligence Ready: ${doc.path}`);
+            log.info({ path: doc.path }, 'Intelligence ready');
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : String(error);
             this.dbService.incrementQueueRetry(item.id, errMsg);
             const retries = this.dbService.getQueueItemRetryCount(item.id);
 
             if (retries >= 3) {
-                console.error(`[Backbone] Max retries reached for doc ${item.doc_id}. Marking failed.`);
+                log.error({ docId: item.doc_id, retries }, 'Max retries reached, marking failed');
                 this.dbService.removeFromQueue(item.id);
                 this.dbService.setIntelligenceStatus(item.doc_id, 'failed');
             } else {
-                console.warn(`[Backbone] Retry ${retries}/3 for doc ${item.doc_id}: ${errMsg}`);
+                log.warn({ docId: item.doc_id, retries, error: errMsg }, 'Retry scheduled');
                 this.dbService.setIntelligenceStatus(item.doc_id, 'pending');
             }
         }
