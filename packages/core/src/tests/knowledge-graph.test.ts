@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { KnowledgeGraphService } from '../services/knowledge-graph.js';
-import { getSharedDatabase } from '../services/database.js';
+import { getSharedDatabase } from '../database/index.js';
 
 describe('KnowledgeGraphService', () => {
     const db = getSharedDatabase();

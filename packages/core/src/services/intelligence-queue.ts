@@ -1,4 +1,4 @@
-import { DatabaseService, getSharedDatabase } from './database.js';
+import { DatabaseService, getSharedDatabase } from '../database/index.js';
 import { EmbeddingService, getSharedEmbeddingService } from './embedding.js';
 
 export class IntelligenceQueueService {

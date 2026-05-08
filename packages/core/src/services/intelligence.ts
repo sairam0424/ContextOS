@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { getWorkspaceRoot } from "../context.js";
-import { DatabaseService, getSharedDatabase } from "./database.js";
+import { DatabaseService, getSharedDatabase } from "../database/index.js";
 import { EmbeddingService, getSharedEmbeddingService } from "./embedding.js";
 import { capabilityService } from "./capability.js";
 

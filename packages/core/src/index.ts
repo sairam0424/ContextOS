@@ -12,7 +12,7 @@ export * from './services/knowledge-graph.js';
 export * from './services/sampling.js';
 export * from './services/watch.js';
 export * from './services/intelligence-queue.js';
-export * from './services/database.js';
+export * from './database/index.js';
 export * from './services/locking.js';
 export * from './services/workspace-config.js';
 export * from './services/mission.js';

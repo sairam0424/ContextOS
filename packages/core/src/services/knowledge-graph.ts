@@ -1,4 +1,4 @@
-import { DatabaseService, getSharedDatabase } from "./database.js";
+import { DatabaseService, getSharedDatabase } from "../database/index.js";
 
 export interface GraphNode {
     id: string; // filePath or symbol:name

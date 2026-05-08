@@ -1,4 +1,4 @@
-import { getSharedDatabase } from './database.js';
+import { getSharedDatabase } from '../database/index.js';
 import { ALLOWED_BUCKETS } from '../context.js';
 
 const DEFAULT_CONFIG: Record<string, string> = {

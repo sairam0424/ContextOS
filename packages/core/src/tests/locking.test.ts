@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { getSharedDatabase } from '../services/database.js';
+import { getSharedDatabase } from '../database/index.js';
 
 describe('LockingService (Database Layer)', () => {
     const db = getSharedDatabase();
@@ -11,9 +11,9 @@ describe('LockingService (Database Layer)', () => {
     });
 
     it('should acquire a lock on an uncontested path', () => {
-        const result = db.acquireLock(testPath, 'agent-a', 5000);
-        assert.ok(result.changes > 0, 'Lock should be acquired');
+        db.acquireLock(testPath, 'agent-a', 5000);
         const lock = db.getLock(testPath);
+        assert.ok(lock, 'Lock should be acquired');
         assert.strictEqual(lock?.agent_id, 'agent-a');
     });
 

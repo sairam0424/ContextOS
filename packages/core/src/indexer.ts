@@ -6,7 +6,7 @@ import TypeScript from 'tree-sitter-typescript';
 import Python from 'tree-sitter-python';
 import { workspaceRoot, ALLOWED_BUCKETS } from './context.js';
 import { validationService } from './services/validation.js';
-import { DatabaseService, DBRecord, getSharedDatabase } from './services/database.js';
+import { DatabaseService, DBRecord, getSharedDatabase } from './database/index.js';
 import { EmbeddingService } from './services/embedding.js';
 
 export interface IndexRecord {

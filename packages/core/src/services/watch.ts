@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import chokidar, { FSWatcher } from 'chokidar';
 import { workspaceRoot, ALLOWED_BUCKETS } from '../context.js';
 import { globalIndexer } from '../indexer.js';
-import { getSharedDatabase } from './database.js';
+import { getSharedDatabase } from '../database/index.js';
 import { samplingService } from './sampling.js';
 import { validationService } from './validation.js';
 import { repairService } from './repair.js';

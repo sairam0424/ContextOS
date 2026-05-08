@@ -1,4 +1,4 @@
-import { getSharedDatabase } from './database.js';
+import { getSharedDatabase } from '../database/index.js';
 
 export interface Mission {
   id: number;
