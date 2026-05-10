@@ -30,6 +30,9 @@ export type { AgentRecord, RegisterOpts, AgentMessage, SendMessageOpts, AgentSta
 export { TaskGraph, TaskScheduler, ConflictResolver } from './orchestration/index.js';
 export type { TaskNode, TaskStatus, CreateTaskOpts, MissionProgress, LockRequest } from './orchestration/index.js';
 
+export { CircuitBreaker, AuditLog } from './resilience/index.js';
+export type { CircuitBreakerConfig, AuditEntry } from './resilience/index.js';
+
 /**
  * Validates that a path is within the workspace root and inside an allowed bucket.
  */

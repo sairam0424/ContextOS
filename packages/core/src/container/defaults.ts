@@ -7,6 +7,8 @@ import { MessageBus } from '../agents/message-bus.js';
 import { TaskGraph } from '../orchestration/task-graph.js';
 import { TaskScheduler } from '../orchestration/scheduler.js';
 import { ConflictResolver } from '../orchestration/conflict-resolver.js';
+import { CircuitBreaker } from '../resilience/circuit-breaker.js';
+import { AuditLog } from '../resilience/audit-log.js';
 
 export function createDefaultContainer(): ServiceContainer {
   const container = new ServiceContainer();
@@ -36,6 +38,14 @@ export function createDefaultContainer(): ServiceContainer {
   container.register(TOKENS.ConflictResolver, (c) => {
     const db = c.resolve<ReturnType<typeof getSharedDatabase>>(TOKENS.Database);
     return new ConflictResolver(db.getRawDb());
+  });
+  container.register(TOKENS.CircuitBreaker, (c) => {
+    const registry = c.resolve<AgentRegistry>(TOKENS.AgentRegistry);
+    return new CircuitBreaker(registry);
+  });
+  container.register(TOKENS.AuditLog, (c) => {
+    const db = c.resolve<ReturnType<typeof getSharedDatabase>>(TOKENS.Database);
+    return new AuditLog(db.getRawDb());
   });
 
   return container;

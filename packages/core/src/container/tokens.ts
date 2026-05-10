@@ -20,6 +20,8 @@ export const TOKENS = {
   TaskGraph: Symbol.for('ctx:TaskGraph'),
   TaskScheduler: Symbol.for('ctx:TaskScheduler'),
   ConflictResolver: Symbol.for('ctx:ConflictResolver'),
+  CircuitBreaker: Symbol.for('ctx:CircuitBreaker'),
+  AuditLog: Symbol.for('ctx:AuditLog'),
 } as const;
 
 export type ServiceToken = typeof TOKENS[keyof typeof TOKENS];
