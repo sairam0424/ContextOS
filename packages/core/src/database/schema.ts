@@ -140,6 +140,35 @@ export function initializeSchema(db: RawDB): void {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agents (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      capabilities TEXT DEFAULT '[]',
+      status TEXT DEFAULT 'active',
+      transport TEXT DEFAULT 'stdio',
+      last_heartbeat INTEGER NOT NULL,
+      registered_at INTEGER NOT NULL,
+      metadata TEXT DEFAULT '{}'
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_messages (
+      id TEXT PRIMARY KEY,
+      correlation_id TEXT,
+      from_agent TEXT NOT NULL,
+      to_agent TEXT NOT NULL,
+      intent TEXT NOT NULL,
+      payload TEXT DEFAULT '{}',
+      timestamp INTEGER NOT NULL,
+      delivered_at INTEGER,
+      ttl INTEGER
+    )
+  `);
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_to ON agent_messages(to_agent, delivered_at)`);
+
   log.debug('Schema initialization complete');
 }
 

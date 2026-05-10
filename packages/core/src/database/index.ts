@@ -13,7 +13,7 @@ import { SymbolsRepository } from './symbols.js';
 import { createChildLogger } from '../logger.js';
 import path from 'path';
 
-import type { DBRecord } from './types.js';
+import type { DBRecord, RawDB } from './types.js';
 
 export type { DBRecord, EdgeRecord, LockRecord, MissionRecord, QueueItem, AccessLogEntry, RawDB } from './types.js';
 export { createConnection } from './connection.js';
@@ -133,6 +133,8 @@ export class DatabaseService {
   setConfig(key: string, value: string) { this.config.set(key, value); }
 
   // --- Lifecycle ---
+
+  getRawDb(): RawDB { return this.db; }
 
   close() {
     this.db.close();
