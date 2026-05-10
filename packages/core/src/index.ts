@@ -18,6 +18,12 @@ export * from './services/workspace-config.js';
 export * from './services/mission.js';
 export * from './services/federation.js';
 
+export { ServiceContainer, TOKENS } from './container/index.js';
+export type { ServiceToken } from './container/index.js';
+export { createDefaultContainer } from './container/index.js';
+export { WorkspaceEventBus } from './events/index.js';
+export type { WorkspaceEvent, EventType, EventPayload, EventHandler } from './events/index.js';
+
 /**
  * Validates that a path is within the workspace root and inside an allowed bucket.
  */
