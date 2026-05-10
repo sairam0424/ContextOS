@@ -27,6 +27,9 @@ export type { WorkspaceEvent, EventType, EventPayload, EventHandler } from './ev
 export { AgentRegistry, MessageBus } from './agents/index.js';
 export type { AgentRecord, RegisterOpts, AgentMessage, SendMessageOpts, AgentStatus } from './agents/index.js';
 
+export { TaskGraph, TaskScheduler, ConflictResolver } from './orchestration/index.js';
+export type { TaskNode, TaskStatus, CreateTaskOpts, MissionProgress, LockRequest } from './orchestration/index.js';
+
 /**
  * Validates that a path is within the workspace root and inside an allowed bucket.
  */

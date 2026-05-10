@@ -4,6 +4,9 @@ import { getSharedDatabase } from '../database/index.js';
 import { WorkspaceEventBus } from '../events/index.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { MessageBus } from '../agents/message-bus.js';
+import { TaskGraph } from '../orchestration/task-graph.js';
+import { TaskScheduler } from '../orchestration/scheduler.js';
+import { ConflictResolver } from '../orchestration/conflict-resolver.js';
 
 export function createDefaultContainer(): ServiceContainer {
   const container = new ServiceContainer();
@@ -19,6 +22,20 @@ export function createDefaultContainer(): ServiceContainer {
     const db = c.resolve<ReturnType<typeof getSharedDatabase>>(TOKENS.Database);
     const bus = c.resolve<WorkspaceEventBus>(TOKENS.EventBus);
     return new MessageBus(db.getRawDb(), bus);
+  });
+  container.register(TOKENS.TaskGraph, (c) => {
+    const db = c.resolve<ReturnType<typeof getSharedDatabase>>(TOKENS.Database);
+    return new TaskGraph(db.getRawDb());
+  });
+  container.register(TOKENS.TaskScheduler, (c) => {
+    const db = c.resolve<ReturnType<typeof getSharedDatabase>>(TOKENS.Database);
+    const registry = c.resolve<AgentRegistry>(TOKENS.AgentRegistry);
+    const msgBus = c.resolve<MessageBus>(TOKENS.MessageBus);
+    return new TaskScheduler(db.getRawDb(), registry, msgBus);
+  });
+  container.register(TOKENS.ConflictResolver, (c) => {
+    const db = c.resolve<ReturnType<typeof getSharedDatabase>>(TOKENS.Database);
+    return new ConflictResolver(db.getRawDb());
   });
 
   return container;

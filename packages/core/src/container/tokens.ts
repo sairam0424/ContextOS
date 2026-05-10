@@ -17,6 +17,9 @@ export const TOKENS = {
   Workspace: Symbol.for('ctx:Workspace'),
   AgentRegistry: Symbol.for('ctx:AgentRegistry'),
   MessageBus: Symbol.for('ctx:MessageBus'),
+  TaskGraph: Symbol.for('ctx:TaskGraph'),
+  TaskScheduler: Symbol.for('ctx:TaskScheduler'),
+  ConflictResolver: Symbol.for('ctx:ConflictResolver'),
 } as const;
 
 export type ServiceToken = typeof TOKENS[keyof typeof TOKENS];
