@@ -24,6 +24,9 @@ export { createDefaultContainer } from './container/index.js';
 export { WorkspaceEventBus } from './events/index.js';
 export type { WorkspaceEvent, EventType, EventPayload, EventHandler } from './events/index.js';
 
+export { AgentRegistry, MessageBus } from './agents/index.js';
+export type { AgentRecord, RegisterOpts, AgentMessage, SendMessageOpts, AgentStatus } from './agents/index.js';
+
 /**
  * Validates that a path is within the workspace root and inside an allowed bucket.
  */

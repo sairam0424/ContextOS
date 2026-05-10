@@ -15,6 +15,8 @@ export const TOKENS = {
   Capability: Symbol.for('ctx:Capability'),
   WorkspaceConfig: Symbol.for('ctx:WorkspaceConfig'),
   Workspace: Symbol.for('ctx:Workspace'),
+  AgentRegistry: Symbol.for('ctx:AgentRegistry'),
+  MessageBus: Symbol.for('ctx:MessageBus'),
 } as const;
 
 export type ServiceToken = typeof TOKENS[keyof typeof TOKENS];
