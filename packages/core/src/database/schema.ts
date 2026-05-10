@@ -169,6 +169,32 @@ export function initializeSchema(db: RawDB): void {
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_to ON agent_messages(to_agent, delivered_at)`);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_nodes (
+      id TEXT PRIMARY KEY,
+      mission_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      assigned_to TEXT,
+      status TEXT DEFAULT 'pending',
+      result TEXT,
+      timeout INTEGER DEFAULT 300,
+      retries INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_dependencies (
+      task_id TEXT NOT NULL,
+      depends_on TEXT NOT NULL,
+      PRIMARY KEY (task_id, depends_on)
+    )
+  `);
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_mission ON task_nodes(mission_id, status)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON task_nodes(assigned_to, status)`);
+
   log.debug('Schema initialization complete');
 }
 
