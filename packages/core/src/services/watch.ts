@@ -7,6 +7,7 @@ import { getSharedDatabase } from '../database/index.js';
 import { samplingService } from './sampling.js';
 import { validationService } from './validation.js';
 import { repairService } from './repair.js';
+import { WorkspaceEventBus } from '../events/index.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('watch');
@@ -16,6 +17,12 @@ export class WatchService extends EventEmitter {
     private repairCount: Map<string, number> = new Map();
     private repairing = new Set<string>();
     private pruneInterval: NodeJS.Timeout | null = null;
+    private eventBus: WorkspaceEventBus | null;
+
+    constructor(eventBus?: WorkspaceEventBus) {
+        super();
+        this.eventBus = eventBus ?? null;
+    }
 
     /**
      * Starts watching the allowed buckets for changes.
@@ -74,6 +81,7 @@ export class WatchService extends EventEmitter {
         
         try {
             log.info({ path: relativePath }, 'Change detected');
+            this.eventBus?.emit({ type: 'file.changed', path: relativePath, kind: 'change' });
             if (ext === '.md') {
                 // Aether 2.0: Self-Healing Loop (Validation + Repair)
                 const { valid, issues } = await validationService.validateFile(filePath);
@@ -117,6 +125,7 @@ export class WatchService extends EventEmitter {
         const relativePath = path.relative(workspaceRoot, filePath);
         try {
             log.info({ path: relativePath }, 'Deletion detected');
+            this.eventBus?.emit({ type: 'file.deleted', path: relativePath });
             await globalIndexer.removeFile(relativePath);
             samplingService.flushCache();
             this.emit('sync', { type: 'delete', path: relativePath });

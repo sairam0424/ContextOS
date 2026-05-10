@@ -1,5 +1,6 @@
 import { DatabaseService, getSharedDatabase } from '../database/index.js';
 import { EmbeddingService, getSharedEmbeddingService } from './embedding.js';
+import { WorkspaceEventBus } from '../events/index.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('intelligence-queue');
@@ -7,13 +8,15 @@ const log = createChildLogger('intelligence-queue');
 export class IntelligenceQueueService {
     private dbService: DatabaseService;
     private embeddingService: EmbeddingService;
+    private eventBus: WorkspaceEventBus | null;
     private isRunning: boolean = false;
     private interval: NodeJS.Timeout | null = null;
     private batchSize: number = 5;
 
-    constructor(db?: DatabaseService, embeddingService?: EmbeddingService) {
+    constructor(db?: DatabaseService, embeddingService?: EmbeddingService, eventBus?: WorkspaceEventBus) {
         this.dbService = db || getSharedDatabase();
         this.embeddingService = embeddingService || getSharedEmbeddingService();
+        this.eventBus = eventBus ?? null;
     }
 
     public start(options: { intervalMs?: number; batchSize?: number } = {}) {
@@ -40,10 +43,11 @@ export class IntelligenceQueueService {
     }
 
     private async processItem(item: { id: number; doc_id: number }) {
+        let doc: ReturnType<DatabaseService['getDocumentById']> = undefined;
         try {
             this.dbService.setIntelligenceStatus(item.doc_id, 'processing');
 
-            const doc = this.dbService.getDocumentById(item.doc_id);
+            doc = this.dbService.getDocumentById(item.doc_id);
             if (!doc) {
                 this.dbService.removeFromQueue(item.id);
                 return;
@@ -56,6 +60,7 @@ export class IntelligenceQueueService {
             this.dbService.removeFromQueue(item.id);
 
             log.info({ path: doc.path }, 'Intelligence ready');
+            this.eventBus?.emit({ type: 'embedding.ready', path: doc.path, docId: item.doc_id });
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : String(error);
             this.dbService.incrementQueueRetry(item.id, errMsg);
@@ -63,6 +68,7 @@ export class IntelligenceQueueService {
 
             if (retries >= 3) {
                 log.error({ docId: item.doc_id, retries }, 'Max retries reached, marking failed');
+                this.eventBus?.emit({ type: 'embedding.failed', path: doc?.path ?? 'unknown', docId: item.doc_id, error: errMsg });
                 this.dbService.removeFromQueue(item.id);
                 this.dbService.setIntelligenceStatus(item.doc_id, 'failed');
             } else {
