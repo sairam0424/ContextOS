@@ -78,4 +78,36 @@ describe('TaskGraph', function () {
     const result = graph.validateDAG(missionId);
     assert.strictEqual(result.valid, true);
   });
+
+  it('detects circular dependencies', () => {
+    const cycleMission = 'mission-cycle';
+    const a = graph.addTask({ missionId: cycleMission, title: 'A', description: 'step a' });
+    const b = graph.addTask({ missionId: cycleMission, title: 'B', description: 'step b', dependencies: [a.id] });
+    const c = graph.addTask({ missionId: cycleMission, title: 'C', description: 'step c', dependencies: [b.id] });
+
+    // Manually insert a cycle: A depends on C (creating A->B->C->A)
+    db.prepare('INSERT INTO task_dependencies (task_id, depends_on) VALUES (?, ?)').run(a.id, c.id);
+
+    const result = graph.validateDAG(cycleMission);
+    assert.strictEqual(result.valid, false);
+  });
+
+  it('permanently fails a task after max retries', () => {
+    const failMission = 'mission-fail';
+    const task = graph.addTask({ missionId: failMission, title: 'Doomed', description: 'will fail' });
+
+    graph.fail(task.id, 'error 1');
+    const after1 = graph.getTask(task.id)!;
+    assert.strictEqual(after1.status, 'pending');
+    assert.strictEqual(after1.retries, 1);
+
+    graph.fail(task.id, 'error 2');
+    const after2 = graph.getTask(task.id)!;
+    assert.strictEqual(after2.status, 'pending');
+    assert.strictEqual(after2.retries, 2);
+
+    graph.fail(task.id, 'error 3');
+    const after3 = graph.getTask(task.id)!;
+    assert.strictEqual(after3.status, 'failed');
+  });
 });

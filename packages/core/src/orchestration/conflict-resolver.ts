@@ -12,6 +12,9 @@ export interface LockRequest {
 
 export class ConflictResolver {
   private locks: LocksRepository;
+  // In-memory only by design — read locks are advisory and volatile across restarts.
+  // Write locks persist via LocksRepository (SQLite). This asymmetry is intentional
+  // for single-process use; multi-process requires DB-backed readers.
   private readers: Map<string, Set<string>> = new Map();
 
   constructor(private db: RawDB) {
