@@ -1,4 +1,7 @@
 import type { WorkspaceEvent, EventType, EventPayload, EventHandler } from './types.js';
+import { createChildLogger } from '../logger.js';
+
+const log = createChildLogger('event-bus');
 
 type Unsubscribe = () => void;
 
@@ -29,7 +32,11 @@ export class WorkspaceEventBus {
     const handlers = this.handlers.get(event.type);
     if (!handlers) return;
     for (const handler of handlers) {
-      handler(event as any);
+      try {
+        handler(event as any);
+      } catch (err) {
+        log.error({ err, type: event.type }, 'Event handler threw');
+      }
     }
   }
 }
