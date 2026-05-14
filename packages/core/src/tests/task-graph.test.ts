@@ -4,6 +4,7 @@ import fs from 'fs-extra';
 import { createConnection } from '../database/connection.js';
 import { initializeSchema, migrateSchema } from '../database/schema.js';
 import { TaskGraph } from '../orchestration/task-graph.js';
+import { WorkspaceEventBus } from '../events/event-bus.js';
 
 const TEST_DIR = path.join(process.cwd(), '.context-db-test-taskgraph');
 
@@ -18,7 +19,8 @@ describe('TaskGraph', function () {
     db = createConnection(path.join(TEST_DIR, 'tasks.db'));
     initializeSchema(db);
     migrateSchema(db);
-    graph = new TaskGraph(db);
+    const eventBus = new WorkspaceEventBus();
+    graph = new TaskGraph(db, eventBus);
   });
 
   after(() => {
