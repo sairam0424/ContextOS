@@ -17,6 +17,7 @@ export * from './services/locking.js';
 export * from './services/workspace-config.js';
 export * from './services/mission.js';
 export * from './services/federation.js';
+export * from './validation.js';
 
 export { ServiceContainer, TOKENS } from './container/index.js';
 export type { ServiceToken } from './container/index.js';

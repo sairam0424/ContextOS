@@ -1,4 +1,5 @@
 import assert from 'node:assert';
+import { randomUUID } from 'node:crypto';
 import path from 'path';
 import fs from 'fs-extra';
 import { createConnection } from '../database/connection.js';
@@ -13,6 +14,11 @@ describe('MessageBus', function () {
   let db: ReturnType<typeof createConnection>;
   let bus: MessageBus;
   let eventBus: WorkspaceEventBus;
+
+  const agentA = randomUUID();
+  const agentB = randomUUID();
+  const agentX = randomUUID();
+  const agentY = randomUUID();
 
   before(() => {
     fs.ensureDirSync(TEST_DIR);
@@ -29,48 +35,48 @@ describe('MessageBus', function () {
   });
 
   it('sends a direct message and retrieves it', () => {
-    const msgId = bus.send({ from: 'agent-a', to: 'agent-b', intent: 'task.assign', payload: { taskId: '1' } });
+    const msgId = bus.send({ from: agentA, to: agentB, intent: 'task.assign', payload: { taskId: '1' } });
     assert.ok(msgId);
 
-    const messages = bus.getUndelivered('agent-b');
+    const messages = bus.getUndelivered(agentB);
     assert.strictEqual(messages.length, 1);
     assert.strictEqual(messages[0].intent, 'task.assign');
-    assert.strictEqual(messages[0].from, 'agent-a');
+    assert.strictEqual(messages[0].from, agentA);
   });
 
   it('acknowledges a message', () => {
-    const messages = bus.getUndelivered('agent-b');
+    const messages = bus.getUndelivered(agentB);
     assert.ok(messages.length > 0);
 
     bus.acknowledge(messages[0].id);
 
-    const remaining = bus.getUndelivered('agent-b');
+    const remaining = bus.getUndelivered(agentB);
     assert.strictEqual(remaining.length, 0);
   });
 
   it('sends a broadcast message (to = *)', () => {
-    bus.send({ from: 'orchestrator', to: '*', intent: 'finding.share', payload: { data: 'test' } });
+    bus.send({ from: 'scheduler', to: '*', intent: 'finding.share', payload: { data: 'test' } });
 
-    const broadcasts = bus.getBroadcasts('agent-a');
+    const broadcasts = bus.getBroadcasts(agentA);
     assert.ok(broadcasts.length >= 1);
     assert.strictEqual(broadcasts[0].intent, 'finding.share');
   });
 
   it('supports correlation IDs for request-reply', () => {
-    bus.send({ from: 'a', to: 'b', intent: 'question', correlationId: 'req-123' });
-    bus.send({ from: 'b', to: 'a', intent: 'answer', correlationId: 'req-123', payload: { result: 42 } });
+    bus.send({ from: agentA, to: agentB, intent: 'question', correlationId: 'req-123' });
+    bus.send({ from: agentB, to: agentA, intent: 'answer', correlationId: 'req-123', payload: { result: 42 } });
 
     const replies = bus.getByCorrelation('req-123');
     assert.strictEqual(replies.length, 2);
   });
 
   it('expired messages are not returned', () => {
-    bus.send({ from: 'x', to: 'y', intent: 'ephemeral', ttl: 1 });
+    bus.send({ from: agentX, to: agentY, intent: 'ephemeral', ttl: 1 });
 
     // Simulate TTL expiry by backdating
     db.prepare(`UPDATE agent_messages SET timestamp = timestamp - 2000 WHERE intent = 'ephemeral'`).run();
 
-    const messages = bus.getUndelivered('y');
+    const messages = bus.getUndelivered(agentY);
     const ephemeral = messages.filter(m => m.intent === 'ephemeral');
     assert.strictEqual(ephemeral.length, 0);
   });
