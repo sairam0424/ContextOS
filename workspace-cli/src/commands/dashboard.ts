@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { WebSocketServer } from "ws";
-import { samplingService, knowledgeGraphService, watchService, lockingService } from "@context-os/core";
+import { samplingService, knowledgeGraphService, watchService, lockingService, getSharedDatabase } from "@context-os/core";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -58,6 +58,20 @@ export function dashboardCommand(program: Command) {
           const graph = await knowledgeGraphService.getGraph();
           res.writeHead(200, { "Content-Type": "application/json" });
           return res.end(JSON.stringify(graph));
+        }
+
+        // Activity timeline endpoint (Phase 5.3)
+        if (url?.startsWith("/api/history")) {
+          const urlObj = new URL(url, `http://localhost:${port}`);
+          const rawLimit = urlObj.searchParams.get("limit") ?? "50";
+          const limit = Math.min(Math.max(parseInt(rawLimit, 10) || 50, 1), 200);
+          const pathFilter = urlObj.searchParams.get("path") ?? undefined;
+          const safePathFilter = pathFilter && pathFilter.length < 500 ? pathFilter : undefined;
+
+          const db = getSharedDatabase();
+          const entries = db.getAccessLog(limit, safePathFilter);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify(entries));
         }
 
         if (url === "/api/telemetry/focus" && req.method === "POST") {
@@ -169,13 +183,27 @@ export function dashboardCommand(program: Command) {
                     }
                   }
                   break;
+                case "acquire_lock":
                 case "request_lock":
-                  if (isValidStr(payload.path))
-                    await lockingService.acquire(payload.path, isValidStr(payload.agentId) ? payload.agentId : 'human');
+                  if (isValidStr(payload.path)) {
+                    const agentId = isValidStr(payload.agentId) ? payload.agentId : 'dashboard';
+                    const acquired = await lockingService.acquire(payload.path, agentId);
+                    // Broadcast lock_update so HUD colors the node immediately
+                    wss.clients.forEach(c => {
+                      if (c.readyState === 1)
+                        c.send(JSON.stringify({ type: "lock_update", path: payload.path, locked: acquired, agentId }));
+                    });
+                  }
                   break;
                 case "release_lock":
-                  if (isValidStr(payload.path))
-                    await lockingService.release(payload.path, isValidStr(payload.agentId) ? payload.agentId : 'human');
+                  if (isValidStr(payload.path)) {
+                    const agentId = isValidStr(payload.agentId) ? payload.agentId : 'dashboard';
+                    await lockingService.release(payload.path, agentId);
+                    wss.clients.forEach(c => {
+                      if (c.readyState === 1)
+                        c.send(JSON.stringify({ type: "lock_update", path: payload.path, locked: false, agentId }));
+                    });
+                  }
                   break;
               }
 

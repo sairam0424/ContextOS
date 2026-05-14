@@ -17,6 +17,7 @@ export interface CapabilityRecord {
  */
 export class CapabilityService {
   private capabilities: CapabilityRecord[] = [];
+  private invertedIndex: Map<string, Set<string>> = new Map(); // term → set of capability ids
 
   constructor() {
     this.reload().catch(err => console.error("Failed to initialize CapabilityService:", err));
@@ -28,7 +29,7 @@ export class CapabilityService {
   public async reload() {
     const workspaceRoot = getWorkspaceRoot();
     const capPath = path.join(workspaceRoot, "capabilities.json");
-    
+
     if (await fs.pathExists(capPath)) {
       try {
         const data = await fs.readJson(capPath);
@@ -40,29 +41,60 @@ export class CapabilityService {
     } else {
       this.capabilities = this.getDefaultCapabilities();
     }
+
+    this.buildIndex();
+  }
+
+  /** Build inverted index over expertise terms for TF-IDF scoring. */
+  private buildIndex() {
+    this.invertedIndex.clear();
+    for (const cap of this.capabilities) {
+      for (const term of cap.expertise) {
+        if (term === '*') continue;
+        const key = term.toLowerCase();
+        if (!this.invertedIndex.has(key)) this.invertedIndex.set(key, new Set());
+        this.invertedIndex.get(key)!.add(cap.id);
+      }
+    }
   }
 
   /**
-   * Finds the best matching capability for a given query or intent.
-   * Phase 3: Simple weighted keyword matching.
+   * Finds the best matching capability for a given intent using TF-IDF scoring.
+   * IDF = log(totalDocs / docsContainingTerm + 1). TF = term frequency in intent.
    */
   public match(intent: string): CapabilityRecord {
-    const normalizedIntent = intent.toLowerCase();
-    
-    // Sort by specificity: exact matches first, then partials, then wildcard
-    const sorted = [...this.capabilities].sort((a, b) => {
-      const aMatch = a.expertise.some(e => normalizedIntent.includes(e.toLowerCase()));
-      const bMatch = b.expertise.some(e => normalizedIntent.includes(e.toLowerCase()));
-      if (aMatch && !bMatch) return -1;
-      if (!aMatch && bMatch) return 1;
-      return 0;
-    });
+    const intentTokens = intent.toLowerCase().split(/\W+/).filter(Boolean);
+    const totalDocs = this.capabilities.length;
 
-    const match = sorted.find(cap => 
-      cap.expertise.some(e => normalizedIntent.includes(e.toLowerCase()) || e === "*")
-    );
+    const scores = new Map<string, number>();
 
-    return match || this.capabilities[0];
+    for (const token of intentTokens) {
+      const matchingIds = this.invertedIndex.get(token);
+      if (!matchingIds) continue;
+      const idf = Math.log(totalDocs / (matchingIds.size + 1));
+      for (const id of matchingIds) {
+        scores.set(id, (scores.get(id) ?? 0) + idf);
+      }
+    }
+
+    // Wildcards always score minimally as fallback
+    for (const cap of this.capabilities) {
+      if (cap.expertise.includes('*') && !scores.has(cap.id)) {
+        scores.set(cap.id, 0.01);
+      }
+    }
+
+    let best: CapabilityRecord = this.capabilities[0];
+    let bestScore = -Infinity;
+    for (const cap of this.capabilities) {
+      const score = (scores.get(cap.id) ?? 0) + (cap.affinity ?? 0) * 0.1;
+      if (score > bestScore) {
+        bestScore = score;
+        best = cap;
+      }
+    }
+
+    return best;
   }
 
   public getCapabilities(): CapabilityRecord[] {

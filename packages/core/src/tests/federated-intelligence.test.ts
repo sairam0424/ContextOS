@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'fs-extra';
 import { KnowledgeGraphService } from '../services/knowledge-graph.js';
 import { SamplingService } from '../services/sampling.js';
-import { DatabaseService } from '../services/database.js';
+import { DatabaseService } from '../database/index.js';
 import { workspaceRoot } from '../context.js';
 
 describe('Federated Intelligence Layer (v1.4.0)', () => {

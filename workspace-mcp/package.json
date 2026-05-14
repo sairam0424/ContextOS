@@ -21,6 +21,8 @@
     "build": "tsc",
     "watch": "tsc -w",
     "start": "node dist/index.js",
+    "mcp:stdio": "node dist/index.js",
+    "mcp:http": "node dist/server-http.js",
     "test": "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin npx mocha dist/tests/**/*.test.js",
     "validate": "exit 0"
   },

@@ -89,6 +89,10 @@ export class EmbeddingService {
         }
     }
 
+    get dimension(): number {
+        return this.provider.dimension;
+    }
+
     async getProviderName(): Promise<string> {
         return this.provider.name;
     }
@@ -96,4 +100,16 @@ export class EmbeddingService {
     async generate(text: string): Promise<Float32Array> {
         return this.provider.generate(text);
     }
+}
+
+let _sharedEmbeddingService: EmbeddingService | null = null;
+
+export function getSharedEmbeddingService(): EmbeddingService {
+    if (!_sharedEmbeddingService) {
+        _sharedEmbeddingService = new EmbeddingService(
+            process.env.GEMINI_API_KEY,
+            process.env.OLLAMA_MODEL
+        );
+    }
+    return _sharedEmbeddingService;
 }

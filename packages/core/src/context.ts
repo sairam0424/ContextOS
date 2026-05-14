@@ -35,6 +35,7 @@ export const ALLOWED_BUCKETS = [
   "root",
   "docs",
   "prompts",
+  "daily",
   "packages",
   "workspace-cli",
   "workspace-dashboard"

@@ -1,4 +1,4 @@
-import { DatabaseService, getSharedDatabase } from "./database.js";
+import { DatabaseService, getSharedDatabase } from "../database/index.js";
 
 export interface WorkspacePulse {
     timestamp: number;
@@ -10,6 +10,7 @@ export interface WorkspacePulse {
         pending: number;
         processing: number;
         ready: number;
+        failed: number;
     };
 }
 
@@ -44,7 +45,8 @@ export class SamplingService {
         const intelligenceStatus = {
             pending: 0,
             processing: 0,
-            ready: 0
+            ready: 0,
+            failed: 0
         };
 
         docs.forEach((doc: any) => {

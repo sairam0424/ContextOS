@@ -1,6 +1,9 @@
 #!/usr/bin/env node
+import { createRequire } from 'module';
 import { Command } from "commander";
 import chalk from "chalk";
+
+const require = createRequire(import.meta.url);
 import { initCommand } from "./commands/init.js";
 import { todayCommand } from "./commands/today.js";
 import { statusCommand } from "./commands/status.js";
@@ -19,13 +22,16 @@ import { indexCommand } from "./commands/index-cmd.js";
 import { graphCommand } from "./commands/graph.js";
 import { watchCommand } from "./commands/watch.js";
 import { dashboardCommand } from "./commands/dashboard.js";
+import { missionCommand } from "./commands/mission.js";
 
 const program = new Command();
+
+const { version } = require('../package.json') as { version: string };
 
 program
   .name("workspace")
   .description("ContextOS Developer Interface Layer")
-  .version("1.1.0");
+  .version(version);
 
 // Register Commands
 initCommand(program);
@@ -46,6 +52,7 @@ indexCommand(program);
 graphCommand(program);
 watchCommand(program);
 dashboardCommand(program);
+missionCommand(program);
 
 program.parse(process.argv);
 

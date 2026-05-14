@@ -1,4 +1,4 @@
-import { DatabaseService, databaseService } from './database.js';
+import { DatabaseService, databaseService } from '../database/index.js';
 import { workspaceRoot } from '../context.js';
 
 export class LockingService {

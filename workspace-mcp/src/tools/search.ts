@@ -9,11 +9,13 @@ export function registerSearchTool(server: McpServer) {
     {
       query: z.string().describe("Search query string"),
       deep: z.boolean().optional().describe("Force deep scan using grep"),
-      anchor: z.string().optional().describe("Anchor node path for Spatial RAG graph-boosted results")
+      anchor: z.string().optional().describe("Anchor node path for Spatial RAG graph-boosted results"),
+      limit: z.number().min(1).max(100).optional().describe("Max results to return (default 10)"),
+      offset: z.number().min(0).optional().describe("Offset for pagination (default 0)")
     },
-    async ({ query, deep, anchor }) => {
+    async ({ query, deep, anchor, limit, offset }) => {
       try {
-        const results = await intelligenceService.search(query, { deep, anchorNode: anchor });
+        const results = await intelligenceService.search(query, { deep, anchorNode: anchor, limit, offset });
 
         if (results.length === 0) {
           return {

@@ -6,8 +6,11 @@ import TypeScript from 'tree-sitter-typescript';
 import Python from 'tree-sitter-python';
 import { workspaceRoot, ALLOWED_BUCKETS } from './context.js';
 import { validationService } from './services/validation.js';
-import { DatabaseService, DBRecord, getSharedDatabase } from './services/database.js';
+import { DatabaseService, DBRecord, getSharedDatabase } from './database/index.js';
 import { EmbeddingService } from './services/embedding.js';
+import { createChildLogger } from './logger.js';
+
+const log = createChildLogger('indexer');
 
 export interface IndexRecord {
     path: string;
@@ -277,7 +280,7 @@ export class ContextIndexer {
                 is_private: isPrivate
             };
         } catch (error) {
-            console.error(`Failed to index ${filePath}:`, error);
+            log.error({ filePath, err: error }, 'Failed to index file');
             return null;
         }
     }

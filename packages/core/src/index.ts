@@ -12,8 +12,26 @@ export * from './services/knowledge-graph.js';
 export * from './services/sampling.js';
 export * from './services/watch.js';
 export * from './services/intelligence-queue.js';
-export * from './services/database.js';
+export * from './database/index.js';
 export * from './services/locking.js';
+export * from './services/workspace-config.js';
+export * from './services/mission.js';
+export * from './services/federation.js';
+
+export { ServiceContainer, TOKENS } from './container/index.js';
+export type { ServiceToken } from './container/index.js';
+export { createDefaultContainer } from './container/index.js';
+export { WorkspaceEventBus } from './events/index.js';
+export type { WorkspaceEvent, EventType, EventPayload, EventHandler } from './events/index.js';
+
+export { AgentRegistry, MessageBus } from './agents/index.js';
+export type { AgentRecord, RegisterOpts, AgentMessage, SendMessageOpts, AgentStatus } from './agents/index.js';
+
+export { TaskGraph, TaskScheduler, ConflictResolver } from './orchestration/index.js';
+export type { TaskNode, TaskStatus, CreateTaskOpts, MissionProgress, LockRequest } from './orchestration/index.js';
+
+export { CircuitBreaker, AuditLog } from './resilience/index.js';
+export type { CircuitBreakerConfig, AuditEntry } from './resilience/index.js';
 
 /**
  * Validates that a path is within the workspace root and inside an allowed bucket.

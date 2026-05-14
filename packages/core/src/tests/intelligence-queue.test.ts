@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { getSharedDatabase } from '../services/database.js';
+import { getSharedDatabase } from '../database/index.js';
 
 describe('IntelligenceQueue (Database Layer)', () => {
     const db = getSharedDatabase();
