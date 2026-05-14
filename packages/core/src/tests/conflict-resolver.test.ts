@@ -62,4 +62,27 @@ describe('ConflictResolver', function () {
     resolver.release('shared.md', 'agent-g');
     resolver.release('shared.md', 'agent-h');
   });
+
+  it('acquireWrite returns false when another agent holds a non-expired DB lock', () => {
+    // Agent-x acquires the write lock on a fresh path
+    assert.strictEqual(resolver.acquireWrite('locked.md', 'agent-x'), true);
+
+    // Agent-y attempts to acquire the same path — must fail
+    assert.strictEqual(resolver.acquireWrite('locked.md', 'agent-y'), false);
+
+    // Verify the original holder is still agent-x
+    const holder = resolver.getHolder('locked.md');
+    assert.ok(holder);
+    assert.strictEqual(holder!.agentId, 'agent-x');
+    assert.strictEqual(holder!.mode, 'write');
+
+    resolver.release('locked.md', 'agent-x');
+  });
+
+  it('acquireWrite succeeds for same agent that already holds the lock', () => {
+    assert.strictEqual(resolver.acquireWrite('reentrant.md', 'agent-r'), true);
+    // Same agent re-acquiring should succeed (idempotent)
+    assert.strictEqual(resolver.acquireWrite('reentrant.md', 'agent-r'), true);
+    resolver.release('reentrant.md', 'agent-r');
+  });
 });

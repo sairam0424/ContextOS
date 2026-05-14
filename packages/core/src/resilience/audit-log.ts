@@ -10,12 +10,13 @@ export interface AuditEntry {
   action: string;
   detail: Record<string, unknown>;
   timestamp: number;
+  sequence: number;
   prevHash: string;
   hash: string;
 }
 
 export class AuditLog {
-  private lastHash: string = '0000000000000000';
+  private lastHash: string = '0'.repeat(64);
 
   constructor(private db: RawDB) {
     this.ensureTable();
@@ -30,49 +31,52 @@ export class AuditLog {
         action TEXT NOT NULL,
         detail TEXT DEFAULT '{}',
         timestamp INTEGER NOT NULL,
+        sequence INTEGER NOT NULL,
         prev_hash TEXT NOT NULL,
         hash TEXT NOT NULL
       )
     `);
-    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_log(agent_id, timestamp)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_log(agent_id, sequence)`);
+    this.db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_sequence ON audit_log(sequence)`);
   }
 
   append(agentId: string, action: string, detail: Record<string, unknown> = {}): AuditEntry {
     const id = randomUUID();
     const timestamp = Date.now();
+    const sequence = this.nextSequence();
     const prevHash = this.lastHash;
 
-    const content = `${id}:${agentId}:${action}:${JSON.stringify(detail)}:${timestamp}:${prevHash}`;
-    const hash = createHash('sha256').update(content).digest('hex').slice(0, 16);
+    const content = `${id}:${agentId}:${action}:${JSON.stringify(detail)}:${timestamp}:${sequence}:${prevHash}`;
+    const hash = createHash('sha256').update(content).digest('hex');
 
     this.db.prepare(`
-      INSERT INTO audit_log (id, agent_id, action, detail, timestamp, prev_hash, hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, agentId, action, JSON.stringify(detail), timestamp, prevHash, hash);
+      INSERT INTO audit_log (id, agent_id, action, detail, timestamp, sequence, prev_hash, hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, agentId, action, JSON.stringify(detail), timestamp, sequence, prevHash, hash);
 
     this.lastHash = hash;
 
-    return { id, agentId, action, detail, timestamp, prevHash, hash };
+    return { id, agentId, action, detail, timestamp, sequence, prevHash, hash };
   }
 
   getForAgent(agentId: string, limit: number = 50): AuditEntry[] {
     const rows = this.db.prepare(`
-      SELECT * FROM audit_log WHERE agent_id = ? ORDER BY timestamp DESC LIMIT ?
+      SELECT * FROM audit_log WHERE agent_id = ? ORDER BY sequence DESC LIMIT ?
     `).all(agentId, limit) as any[];
     return rows.map(r => this.toEntry(r));
   }
 
   verifyIntegrity(): { valid: boolean; brokenAt?: string } {
-    const rows = this.db.prepare(`SELECT * FROM audit_log ORDER BY timestamp ASC`).all() as any[];
-    let expectedPrevHash = '0000000000000000';
+    const rows = this.db.prepare(`SELECT * FROM audit_log ORDER BY sequence ASC`).all() as any[];
+    let expectedPrevHash = '0'.repeat(64);
 
     for (const row of rows) {
       if (row.prev_hash !== expectedPrevHash) {
         return { valid: false, brokenAt: row.id };
       }
 
-      const content = `${row.id}:${row.agent_id}:${row.action}:${row.detail}:${row.timestamp}:${row.prev_hash}`;
-      const computedHash = createHash('sha256').update(content).digest('hex').slice(0, 16);
+      const content = `${row.id}:${row.agent_id}:${row.action}:${row.detail}:${row.timestamp}:${row.sequence}:${row.prev_hash}`;
+      const computedHash = createHash('sha256').update(content).digest('hex');
 
       if (computedHash !== row.hash) {
         return { valid: false, brokenAt: row.id };
@@ -85,8 +89,13 @@ export class AuditLog {
   }
 
   private getLastHash(): string {
-    const row = this.db.prepare(`SELECT hash FROM audit_log ORDER BY timestamp DESC LIMIT 1`).get() as any;
-    return row?.hash ?? '0000000000000000';
+    const row = this.db.prepare(`SELECT hash FROM audit_log ORDER BY sequence DESC LIMIT 1`).get() as any;
+    return row?.hash ?? '0'.repeat(64);
+  }
+
+  private nextSequence(): number {
+    const row = this.db.prepare(`SELECT MAX(sequence) as max_seq FROM audit_log`).get() as any;
+    return (row?.max_seq ?? 0) + 1;
   }
 
   private toEntry(row: any): AuditEntry {
@@ -96,6 +105,7 @@ export class AuditLog {
       action: row.action,
       detail: JSON.parse(row.detail),
       timestamp: row.timestamp,
+      sequence: row.sequence,
       prevHash: row.prev_hash,
       hash: row.hash,
     };

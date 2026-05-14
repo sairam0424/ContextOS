@@ -1,14 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import type { RawDB } from '../database/types.js';
 import type { TaskNode, CreateTaskOpts, TaskStatus, MissionProgress } from './types.js';
+import type { WorkspaceEventBus } from '../events/index.js';
 import { createChildLogger } from '../logger.js';
+import { validateName } from '../validation.js';
 
 const log = createChildLogger('task-graph');
 
 export class TaskGraph {
-  constructor(private db: RawDB) {}
+  constructor(private db: RawDB, private eventBus: WorkspaceEventBus) {}
 
   addTask(opts: CreateTaskOpts): TaskNode {
+    const validatedTitle = validateName(opts.title, 256);
+    const validatedDescription = validateName(opts.description, 4096);
+
     const id = randomUUID();
     const now = Date.now();
     const deps = opts.dependencies ?? [];
@@ -16,7 +21,7 @@ export class TaskGraph {
     this.db.prepare(`
       INSERT INTO task_nodes (id, mission_id, title, description, timeout, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, opts.missionId, opts.title, opts.description, opts.timeout ?? 300, now);
+    `).run(id, opts.missionId, validatedTitle, validatedDescription, opts.timeout ?? 300, now);
 
     for (const depId of deps) {
       this.db.prepare(`INSERT INTO task_dependencies (task_id, depends_on) VALUES (?, ?)`).run(id, depId);
@@ -27,8 +32,8 @@ export class TaskGraph {
     return {
       id,
       missionId: opts.missionId,
-      title: opts.title,
-      description: opts.description,
+      title: validatedTitle,
+      description: validatedDescription,
       status: 'pending',
       dependencies: deps,
       timeout: opts.timeout ?? 300,
@@ -63,14 +68,22 @@ export class TaskGraph {
     this.db.prepare(`UPDATE task_nodes SET status = ? WHERE id = ?`).run(status, taskId);
   }
 
-  assign(taskId: string, agentId: string): void {
-    this.db.prepare(`UPDATE task_nodes SET status = 'assigned', assigned_to = ? WHERE id = ?`).run(agentId, taskId);
+  assign(taskId: string, agentId: string): boolean {
+    const result = this.db.prepare(
+      `UPDATE task_nodes SET status = 'assigned', assigned_to = ? WHERE id = ? AND status = 'pending'`
+    ).run(agentId, taskId);
+    if (result.changes > 0) {
+      this.eventBus.emit({ type: 'task.assigned', taskId, agentId });
+      return true;
+    }
+    return false;
   }
 
   complete(taskId: string, result?: unknown): void {
     this.db.prepare(`UPDATE task_nodes SET status = 'completed', result = ? WHERE id = ?`).run(
       result ? JSON.stringify(result) : null, taskId
     );
+    this.eventBus.emit({ type: 'task.completed', taskId });
   }
 
   fail(taskId: string, error: string): void {
@@ -82,6 +95,7 @@ export class TaskGraph {
       log.warn({ taskId, retries: task.retries + 1 }, 'Task failed, retrying');
     } else {
       this.db.prepare(`UPDATE task_nodes SET status = 'failed', result = ? WHERE id = ?`).run(JSON.stringify({ error }), taskId);
+      this.eventBus.emit({ type: 'task.failed', taskId });
       log.error({ taskId }, 'Task permanently failed');
     }
   }

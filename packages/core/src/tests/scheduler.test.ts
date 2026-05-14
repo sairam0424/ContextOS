@@ -24,7 +24,7 @@ describe('TaskScheduler', function () {
     const eventBus = new WorkspaceEventBus();
     registry = new AgentRegistry(db, eventBus);
     const messageBus = new MessageBus(db, eventBus);
-    scheduler = new TaskScheduler(db, registry, messageBus);
+    scheduler = new TaskScheduler(db, registry, messageBus, eventBus);
   });
 
   after(() => {

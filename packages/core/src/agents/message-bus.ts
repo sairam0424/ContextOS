@@ -3,6 +3,7 @@ import type { RawDB } from '../database/types.js';
 import type { AgentMessage, SendMessageOpts } from './types.js';
 import type { WorkspaceEventBus } from '../events/index.js';
 import { createChildLogger } from '../logger.js';
+import { validateAgentId, validateIntent, validatePayload } from '../validation.js';
 
 const log = createChildLogger('message-bus');
 
@@ -10,14 +11,20 @@ export class MessageBus {
   constructor(private db: RawDB, private eventBus: WorkspaceEventBus) {}
 
   send(opts: SendMessageOpts): string {
+    const validatedFrom = validateAgentId(opts.from);
+    const validatedTo = validateAgentId(opts.to);
+    const validatedIntent = validateIntent(opts.intent);
+    const validatedPayload = validatePayload(opts.payload ?? {});
+
     const id = randomUUID();
     const now = Date.now();
 
     this.db.prepare(`
       INSERT INTO agent_messages (id, correlation_id, from_agent, to_agent, intent, payload, timestamp, ttl)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, opts.correlationId ?? null, opts.from, opts.to, opts.intent, JSON.stringify(opts.payload ?? {}), now, opts.ttl ?? null);
+    `).run(id, opts.correlationId ?? null, validatedFrom, validatedTo, validatedIntent, validatedPayload, now, opts.ttl ?? null);
 
+    this.eventBus.emit({ type: 'message.sent', from: opts.from, to: opts.to, intent: opts.intent });
     log.debug({ messageId: id, from: opts.from, to: opts.to, intent: opts.intent }, 'Message sent');
     return id;
   }

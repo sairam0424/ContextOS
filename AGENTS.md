@@ -13,6 +13,18 @@ Four workspaces under one root:
 
 Build order: Core -> CLI/MCP/Dashboard (Turbo handles dependency graph via `^build`).
 
+### Core Internal Architecture (v2)
+
+The core package uses a **dependency injection container** (`src/container/`) with typed tokens for all services. Key subsystems:
+
+- **`container/`** — `ServiceContainer` with scoped resolution; `tokens.ts` defines injection keys; `defaults.ts` wires the default graph.
+- **`events/`** — `WorkspaceEventBus` with typed event payloads. Handlers are error-isolated (one failing handler does not cascade).
+- **`agents/`** — `AgentRegistry` (lifecycle management) + `MessageBus` (direct/broadcast/correlation messaging).
+- **`orchestration/`** — `TaskGraph` (DAG validation, cycle detection), `TaskScheduler` (dependency-aware assignment), `ConflictResolver` (read/write lock upgrades).
+- **`resilience/`** — `CircuitBreaker` (open/half-open/closed states) + Merkle-linked `AuditLog`.
+
+All new modules register themselves in the default container and export from `src/index.ts`.
+
 ## Build, Test, and Development Commands
 
 ```bash
@@ -51,6 +63,7 @@ cd packages/core && npx mocha dist/tests/some-file.test.js
 
 - **Framework**: Mocha + Chai (core, cli, mcp).
 - Tests must compile first — they live in `src/tests/` as `.ts` and run from `dist/tests/` after build.
+- Core tests use per-test temp databases (look for `.context-db-test-*` dirs — gitignored).
 - The dashboard has no test suite.
 
 ## Version & Release Protocol

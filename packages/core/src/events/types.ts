@@ -10,7 +10,14 @@ export type WorkspaceEvent =
   | { type: 'lock.acquired'; path: string; agentId: string }
   | { type: 'lock.released'; path: string; agentId: string }
   | { type: 'agent.focused'; path: string; agentId: string }
-  | { type: 'pulse.updated'; healthScore: number };
+  | { type: 'pulse.updated'; healthScore: number }
+  | { type: 'agent.registered'; agentId: string; name: string }
+  | { type: 'agent.deregistered'; agentId: string; reason: string }
+  | { type: 'agent.quarantined'; agentId: string; reason: string }
+  | { type: 'message.sent'; from: string; to: string; intent: string }
+  | { type: 'task.assigned'; taskId: string; agentId: string }
+  | { type: 'task.completed'; taskId: string }
+  | { type: 'task.failed'; taskId: string };
 
 export type EventType = WorkspaceEvent['type'];
 
