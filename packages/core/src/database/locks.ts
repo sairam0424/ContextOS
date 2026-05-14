@@ -3,16 +3,18 @@ import type { RawDB, LockRecord } from './types.js';
 export class LocksRepository {
   constructor(private db: RawDB) {}
 
-  acquire(path: string, agentId: string, durationMs: number = 300000): void {
-    const expiresAt = Date.now() + durationMs;
-    this.db.prepare(`
+  acquire(path: string, agentId: string, durationMs: number = 300000): boolean {
+    const now = Date.now();
+    const expiresAt = now + durationMs;
+    const result = this.db.prepare(`
       INSERT INTO locks (path, agent_id, expires_at, created_at)
       VALUES (?, ?, ?, ?)
       ON CONFLICT(path) DO UPDATE SET
         agent_id = excluded.agent_id,
         expires_at = excluded.expires_at
       WHERE locks.expires_at < ? OR locks.agent_id = ?
-    `).run(path, agentId, expiresAt, Date.now(), Date.now(), agentId);
+    `).run(path, agentId, expiresAt, now, now, agentId);
+    return result.changes > 0;
   }
 
   release(path: string, agentId: string): void {

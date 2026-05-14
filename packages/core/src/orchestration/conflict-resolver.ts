@@ -53,7 +53,11 @@ export class ConflictResolver {
       return false;
     }
 
-    this.locks.acquire(path, agentId);
+    const acquired = this.locks.acquire(path, agentId);
+    if (!acquired) {
+      log.debug({ path, agentId }, 'Write lock acquire failed at DB layer');
+      return false;
+    }
     log.debug({ path, agentId }, 'Write lock acquired');
     return true;
   }
