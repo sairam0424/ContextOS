@@ -1,100 +1,125 @@
-# 🌌 ContextOS: Nexus Edition (v1.11.0)
+# ContextOS (v1.12.0)
 
-> **The Autonomous Spatial Intelligence Layer for AI Agents.**
+> Enterprise-grade intelligence layer for autonomous AI agents.
 
-ContextOS is a high-fidelity intelligence infrastructure designed to bridge the gap between development activity and structured AI context. The **Nexus Edition** introduces autonomous self-healing, graph-aware search weighting, and real-time resilience telemetry.
-
----
-
-## 🛠️ Troubleshooting: The `EPERM` Blockade
-
-If you encounter `npm error code EPERM` or `Operation not permitted` during publication, it is likely due to root-owned files in your NPM cache on macOS.
-
-### The Symptom
-
-```text
-npm error syscall mkdir
-npm error path /Users/sairamugge/.npm/_cacache/tmp
-npm error errno EPERM
-```
-
-### 1. Synchronize Versioning
-
-Before publishing, you must bump the version in **all 4 manifests**.
-
-> [!IMPORTANT]
-> ContextOS maintains strict version parity. If the project moves to `1.6.2`, all packages must be `1.6.2`.
-
-**Files to update:**
-
-- `package.json` (Root)
-- `packages/core/package.json`
-- `workspace-cli/package.json` (Also update `@context-os/core` dependency version)
-- `workspace-mcp/package.json` (Also update `@context-os/core` dependency version)
+ContextOS is a TypeScript monorepo providing structured context infrastructure — from workspace indexing and vector search to multi-agent orchestration with built-in resilience. Ships as three npm packages and a spatial dashboard.
 
 ---
 
-## 🕹️ The Aether Command Deck (Nexus)
-The v1.11.0 upgrade transforms the **Aether HUD** into an active mission-control dashboard.
+## Quick Start
 
-*   **Autonomous Resilience (Janitor Agent)**: Gemini-powered self-healing that automatically reconstructs broken context or damaged project schemas with 3rd-attempt safety loops.
-*   **Spatial RAG**: Topological search weighting that prioritizes results based on graph proximity, significantly reducing context noise for agents.
-*   **Resilience Telemetry**: Nodes undergoing repair pulse with high-intensity yellow light, while persistent failures glow red for human intervention.
-*   **The Sentinel (Watch Service)**: Proactive background health monitoring that ensures architectural intelligence is always synchronized.
-*   **3D Knowledge Graph**: Immersive visualization of the project "Soul," memory patterns, and architectural decisions.
+### Install the CLI
 
----
-
-## ⚡ Quick Start
-
-### 1. Install the CLI
-To use ContextOS in your terminal anywhere:
 ```bash
 npm install -g @context-os/cli
 ```
 
-### 2. Enter the Dash (HUD)
-Launch the spatial dashboard to visualize your workspace health:
+### Initialize a Project
+
+```bash
+context-os init my-project
+```
+
+### Connect an AI Agent (MCP)
+
+In Cursor, Claude Desktop, or VS Code settings:
+
+```bash
+npx -y @context-os/mcp@latest
+```
+
+### Launch the Dashboard
+
 ```bash
 context-os dashboard
 ```
 
-### 3. Initialize a Project
-```bash
-context-os init my-cool-project
-```
+---
 
-### 4. Connect your AI Agent (MCP)
-In Cursor, Claude Desktop, or VS Code settings, add the following command:
-```bash
-npx -y @context-os/mcp@latest
-```
-*Note: Using `npx` ensures you always have the latest intelligence features without manual updates.*
+## Architecture
+
+Four workspaces under one Turborepo root:
+
+| Package | Description |
+| :--- | :--- |
+| `@context-os/core` | SQLite indexer, vector search (sqlite-vec), ML embeddings, tree-sitter parsing, DI container, event bus, agent registry, orchestration, resilience |
+| `@context-os/cli` | Terminal interface — project scaffolding, search, watch, dashboard launcher |
+| `@context-os/mcp` | Model Context Protocol server — stdio and HTTP/SSE transports |
+| `workspace-dashboard` | React 19 + Three.js spatial visualization (private, not published) |
+
+### v2 Core Modules
+
+| Module | Purpose |
+| :--- | :--- |
+| **ServiceContainer** | Dependency injection with scoped resolution and typed tokens |
+| **WorkspaceEventBus** | Typed events with error-isolated handlers |
+| **AgentRegistry** | Lifecycle management — register, heartbeat, quarantine, stale detection |
+| **MessageBus** | Direct, broadcast, and correlation-based messaging with TTL |
+| **TaskGraph** | DAG-validated task dependencies with compare-and-swap assignment |
+| **TaskScheduler** | Dependency-aware scheduling with contention retry |
+| **ConflictResolver** | Read/write locks with upgrade support |
+| **CircuitBreaker** | Sliding-window failure tracking with auto-quarantine |
+| **AuditLog** | Merkle-linked tamper-evident audit trail |
 
 ---
 
-## 🛠️ Capability Matrix
+## Development
 
-| Feature | CLI (`context-os`) | MCP (AI Agents) |
-| :--- | :---: | :---: |
-| **Aether Dashboard (HUD)** | ✅ | ❌ |
-| **Real-time Sentinel (Watch)** | ✅ | ❌ |
-| Project Scaffolding | ✅ | ❌ |
-| Daily Logging | ✅ | ✅ |
-| ADR Tracking (Decisions) | ✅ | ✅ |
-| Workspace Validation | ✅ | ❌ |
-| Global Search | ✅ | ✅ |
-| Memory Pruning | ✅ | ❌ |
+```bash
+npm run build          # Turbo: build all workspaces
+npm run test           # Turbo: run mocha tests (core/cli/mcp)
+npm run link:all       # Build + npm link for local dev
+```
+
+Per-workspace:
+
+```bash
+cd workspace-dashboard && npm run dev    # Vite dev server
+cd workspace-cli && npm run watch        # tsc watch
+cd workspace-mcp && npm run mcp:stdio    # Run MCP server
+```
+
+Run a single test:
+
+```bash
+cd packages/core && npx mocha dist/tests/container.test.js
+```
 
 ---
 
-## 📖 Documentation
-- [**User Guide**](./USER_GUIDE.md): Getting started, daily workflows, and Aether setup.
-- [**Leveling Up**](./docs/cli.md): Full command breakdown.
-- [**Architecture Deep Dive**](./docs/architecture.md): System layers, security, and data flow.
-- [**Publishing Guide**](./docs/publishing.md): Build and distribution protocol.
+## Capability Matrix
+
+| Feature | CLI | MCP | Core |
+| :--- | :---: | :---: | :---: |
+| Spatial Dashboard (Aether HUD) | x | | |
+| Real-time Watch Service | x | | |
+| Project Scaffolding | x | | |
+| Daily Logging | x | x | |
+| ADR Tracking | x | x | |
+| Workspace Validation | x | | |
+| Global Search | x | x | x |
+| Multi-Agent Orchestration | | | x |
+| Circuit Breaker / Resilience | | | x |
+| Merkle Audit Log | | | x |
+
+---
+
+## Version & Release
+
+All four `package.json` files must share the same version. Publish order: Core -> CLI -> MCP. Triggered by pushing a `v*` tag. CI runs on Node 22.
+
+---
+
+## Documentation
+
+- [User Guide](./USER_GUIDE.md) — Getting started and daily workflows
+- [CLI Commands](./docs/cli.md) — Full command reference
+- [Architecture](./docs/architecture.md) — System layers and data flow
+- [Publishing](./docs/publishing.md) — Build and release protocol
+- [v2 Upgrade Plan](./docs/v2-upgrade-plan.md) — Multi-agent architecture design
 
 ---
 
 ## 📄 License
+
 MIT © [Sairam Ugge](https://github.com/sairam0424)
