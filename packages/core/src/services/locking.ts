@@ -1,5 +1,4 @@
-import { DatabaseService, databaseService } from '../database/index.js';
-import { workspaceRoot } from '../context.js';
+import { DatabaseService, getSharedDatabase } from '../database/index.js';
 
 export class LockingService {
   constructor(private db: DatabaseService) {}
@@ -37,5 +36,24 @@ export class LockingService {
   }
 }
 
-// Singleton for easier core integration
-export const lockingService = new LockingService(databaseService);
+let _lockingInstance: LockingService | null = null;
+
+/** Lazily-initialized singleton for backward compatibility. */
+export function getLockingService(): LockingService {
+  if (!_lockingInstance) {
+    _lockingInstance = new LockingService(getSharedDatabase());
+  }
+  return _lockingInstance;
+}
+
+/**
+ * @deprecated Use `getLockingService()` or inject via DI container.
+ * This proxy defers DB initialization until first method call.
+ */
+export const lockingService: LockingService = new Proxy({} as LockingService, {
+  get(_target, prop, receiver) {
+    const real = getLockingService();
+    const value = Reflect.get(real, prop, receiver);
+    return typeof value === 'function' ? value.bind(real) : value;
+  }
+});
