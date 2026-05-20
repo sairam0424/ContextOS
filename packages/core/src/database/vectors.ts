@@ -1,4 +1,43 @@
+import { createHash } from 'node:crypto';
 import type { RawDB } from './types.js';
+
+const CACHE_MAX_SIZE = 100;
+const searchCache = new Map<string, { result: any; timestamp: number }>();
+const CACHE_TTL_MS = 30_000; // 30 seconds
+
+function getCacheKey(queryText: string, limit: number, offset: number, includePrivate: boolean): string {
+  return createHash('md5').update(`${queryText}:${limit}:${offset}:${includePrivate}`).digest('hex');
+}
+
+function pruneCache(): void {
+  if (searchCache.size <= CACHE_MAX_SIZE) return;
+  const entries = Array.from(searchCache.entries()).sort((a, b) => a[1].timestamp - b[1].timestamp);
+  const toRemove = entries.slice(0, entries.length - CACHE_MAX_SIZE);
+  for (const [key] of toRemove) searchCache.delete(key);
+}
+
+/**
+ * Sanitizes a user-provided query string for safe use with FTS5 MATCH.
+ * Removes FTS5 operators, wildcards, and column prefixes, then wraps
+ * each remaining token in double quotes.
+ */
+function sanitizeFTS5(query: string): string {
+  let sanitized = query
+    .replace(/\b(AND|OR|NOT|NEAR)\b/gi, '')
+    .replace(/\*/g, '')
+    .replace(/\w+:/g, '');
+
+  const tokens = sanitized
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length > 0);
+
+  if (tokens.length === 0) return '';
+
+  return tokens
+    .map(t => '"' + t.replace(/"/g, '""') + '"')
+    .join(' ');
+}
 
 export class VectorsRepository {
   constructor(private db: RawDB) {}
@@ -59,6 +98,12 @@ export class VectorsRepository {
   }
 
   searchHybrid(queryEmbedding: Float32Array, queryText: string, limit: number = 10, includePrivate: boolean = false, offset: number = 0) {
+    const cacheKey = getCacheKey(queryText, limit, offset, includePrivate);
+    const cached = searchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return cached.result;
+    }
+
     const privateFilter = includePrivate ? '' : 'AND d.is_private = 0';
 
     const semanticStmt = this.db.prepare(`
@@ -75,7 +120,7 @@ export class VectorsRepository {
       Buffer.from(queryEmbedding.buffer), queryEmbedding.length, limit, offset
     ) as any[];
 
-    const safeQuery = queryText.replace(/"/g, '""');
+    const sanitizedQuery = sanitizeFTS5(queryText);
     const keywordStmt = this.db.prepare(`
       SELECT d.id, d.path, d.title, d.excerpt, rank
       FROM fts_documents fts
@@ -84,10 +129,15 @@ export class VectorsRepository {
       ORDER BY rank
       LIMIT ? OFFSET ?
     `);
-    const keywordResults = keywordStmt.all('"' + safeQuery + '"', limit, offset) as any[];
+    const keywordResults = sanitizedQuery
+      ? keywordStmt.all(sanitizedQuery, limit, offset) as any[]
+      : [];
 
     const combined = this.fuseResults(semanticResults, keywordResults, limit);
-    return { semanticResults, keywordResults, combined };
+    const result = { semanticResults, keywordResults, combined };
+    searchCache.set(cacheKey, { result, timestamp: Date.now() });
+    pruneCache();
+    return result;
   }
 
   private fuseResults(semantic: any[], keyword: any[], limit: number): any[] {
