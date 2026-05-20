@@ -1,0 +1,10 @@
+# Default owner for everything
+* @sairam0424
+
+# Core package requires careful review
+packages/core/ @sairam0424
+packages/core/src/resilience/ @sairam0424
+packages/core/src/orchestration/ @sairam0424
+
+# Security-sensitive files
+workspace-mcp/src/server-http.ts @sairam0424
