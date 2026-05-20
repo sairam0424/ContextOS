@@ -30,7 +30,18 @@ export class TaskScheduler {
       return null;
     }
 
-    const agent = agents[0];
+    // Least-loaded selection: pick agent with fewest currently-assigned tasks
+    const agentTaskCounts = new Map<string, number>();
+    for (const a of agents) {
+      const row = this.db.prepare(
+        `SELECT COUNT(*) as count FROM task_nodes WHERE assigned_to = ? AND status = 'assigned'`
+      ).get(a.id) as { count: number } | undefined;
+      agentTaskCounts.set(a.id, row?.count ?? 0);
+    }
+    const sortedAgents = [...agents].sort((a, b) =>
+      (agentTaskCounts.get(a.id) ?? 0) - (agentTaskCounts.get(b.id) ?? 0)
+    );
+    const agent = sortedAgents[0];
 
     for (const task of ready) {
       const assigned = this.graph.assign(task.id, agent.id);
@@ -60,6 +71,47 @@ export class TaskScheduler {
 
   fail(taskId: string, error: string): void {
     this.graph.fail(taskId, error);
+  }
+
+  enforceTimeouts(missionId: string): TaskNode[] {
+    const assignedTasks = this.graph.getAssignedTasks(missionId);
+    const now = Date.now();
+    const timedOut: TaskNode[] = [];
+
+    for (const task of assignedTasks) {
+      const assignedAt = this.graph.getAssignedAt(task.id);
+      if (!assignedAt) continue;
+
+      const timeoutMs = task.timeout * 1000;
+      if (now - assignedAt > timeoutMs) {
+        this.graph.fail(task.id, 'Task timed out');
+        log.warn({ taskId: task.id, missionId, timeoutSeconds: task.timeout }, 'Task timed out, marked as failed');
+        timedOut.push(task);
+      }
+    }
+
+    return timedOut;
+  }
+
+  releaseOrphanedTasks(missionId: string): TaskNode[] {
+    const assignedTasks = this.graph.getAssignedTasks(missionId);
+    const released: TaskNode[] = [];
+
+    for (const task of assignedTasks) {
+      if (!task.assignedTo) continue;
+
+      const agent = this.registry.getById(task.assignedTo);
+      if (!agent || agent.status === 'quarantined') {
+        this.graph.resetToPending(task.id);
+        log.warn(
+          { taskId: task.id, agentId: task.assignedTo, reason: agent ? 'quarantined' : 'missing' },
+          'Releasing orphaned task back to pending'
+        );
+        released.push(task);
+      }
+    }
+
+    return released;
   }
 
   getProgress(missionId: string) {

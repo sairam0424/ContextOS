@@ -54,14 +54,16 @@ export class TaskGraph {
   }
 
   getReady(missionId: string): TaskNode[] {
-    const tasks = this.getTasksForMission(missionId);
-    return tasks.filter(t => {
-      if (t.status !== 'pending') return false;
-      return t.dependencies.every(depId => {
-        const dep = tasks.find(d => d.id === depId);
-        return dep?.status === 'completed';
-      });
-    });
+    const rows = this.db.prepare(`
+      SELECT tn.* FROM task_nodes tn
+      WHERE tn.mission_id = ? AND tn.status = 'pending'
+      AND NOT EXISTS (
+        SELECT 1 FROM task_dependencies td
+        JOIN task_nodes dep ON td.depends_on = dep.id
+        WHERE td.task_id = tn.id AND dep.status != 'completed'
+      )
+    `).all(missionId) as any[];
+    return rows.map(r => this.toNode(r));
   }
 
   updateStatus(taskId: string, status: TaskStatus): void {
@@ -69,14 +71,34 @@ export class TaskGraph {
   }
 
   assign(taskId: string, agentId: string): boolean {
+    const now = Date.now();
     const result = this.db.prepare(
-      `UPDATE task_nodes SET status = 'assigned', assigned_to = ? WHERE id = ? AND status = 'pending'`
-    ).run(agentId, taskId);
+      `UPDATE task_nodes SET status = 'assigned', assigned_to = ?, assigned_at = ? WHERE id = ? AND status = 'pending'`
+    ).run(agentId, now, taskId);
     if (result.changes > 0) {
       this.eventBus.emit({ type: 'task.assigned', taskId, agentId });
       return true;
     }
     return false;
+  }
+
+  resetToPending(taskId: string): void {
+    this.db.prepare(
+      `UPDATE task_nodes SET status = 'pending', assigned_to = NULL, assigned_at = NULL WHERE id = ?`
+    ).run(taskId);
+    log.info({ taskId }, 'Task reset to pending');
+  }
+
+  getAssignedTasks(missionId: string): TaskNode[] {
+    const rows = this.db.prepare(
+      `SELECT * FROM task_nodes WHERE mission_id = ? AND status = 'assigned'`
+    ).all(missionId) as any[];
+    return rows.map(r => this.toNode(r));
+  }
+
+  getAssignedAt(taskId: string): number | undefined {
+    const row = this.db.prepare(`SELECT assigned_at FROM task_nodes WHERE id = ?`).get(taskId) as any;
+    return row?.assigned_at ?? undefined;
   }
 
   complete(taskId: string, result?: unknown): void {
@@ -101,20 +123,27 @@ export class TaskGraph {
   }
 
   getProgress(missionId: string): MissionProgress {
-    const tasks = this.getTasksForMission(missionId);
+    const rows = this.db.prepare(`
+      SELECT status, COUNT(*) as count FROM task_nodes WHERE mission_id = ? GROUP BY status
+    `).all(missionId) as Array<{ status: string; count: number }>;
+
+    const counts = Object.fromEntries(rows.map(r => [r.status, r.count]));
+    const total = rows.reduce((sum, r) => sum + r.count, 0);
+
     return {
       missionId,
-      total: tasks.length,
-      pending: tasks.filter(t => t.status === 'pending').length,
-      assigned: tasks.filter(t => t.status === 'assigned').length,
-      inProgress: tasks.filter(t => t.status === 'in_progress').length,
-      completed: tasks.filter(t => t.status === 'completed').length,
-      failed: tasks.filter(t => t.status === 'failed').length,
+      total,
+      pending: counts['pending'] ?? 0,
+      assigned: counts['assigned'] ?? 0,
+      inProgress: counts['in_progress'] ?? 0,
+      completed: counts['completed'] ?? 0,
+      failed: counts['failed'] ?? 0,
     };
   }
 
   validateDAG(missionId: string): { valid: boolean; cycles?: string[] } {
     const tasks = this.getTasksForMission(missionId);
+    const taskMap = new Map(tasks.map(t => [t.id, t]));
     const visited = new Set<string>();
     const inStack = new Set<string>();
     const cycles: string[] = [];
@@ -129,7 +158,7 @@ export class TaskGraph {
       visited.add(taskId);
       inStack.add(taskId);
 
-      const task = tasks.find(t => t.id === taskId);
+      const task = taskMap.get(taskId);
       if (task) {
         for (const dep of task.dependencies) {
           if (dfs(dep)) return true;

@@ -31,22 +31,26 @@ export class GeminiProvider implements EmbeddingProvider {
     }
 
     async generate(text: string): Promise<Float32Array> {
-        // Implementation for Gemini Embedding API
-        // For now, we provide the structure. 
-        // We'll use a fetch call to the Gemini API endpoint.
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${this.apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                content: { parts: [{ text }] }
-            })
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10_000);
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${this.apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                signal: controller.signal,
+                body: JSON.stringify({
+                    content: { parts: [{ text }] }
+                })
+            });
 
-        const data = await response.json();
-        if (!data.embedding) {
-            throw new Error(`Gemini Embedding Failed: ${JSON.stringify(data)}`);
+            const data = await response.json();
+            if (!data.embedding) {
+                throw new Error(`Gemini Embedding Failed: ${JSON.stringify(data)}`);
+            }
+            return new Float32Array(data.embedding.values);
+        } finally {
+            clearTimeout(timeout);
         }
-        return new Float32Array(data.embedding.values);
     }
 }
 
@@ -60,19 +64,26 @@ export class OllamaProvider implements EmbeddingProvider {
     }
 
     async generate(text: string): Promise<Float32Array> {
-        const response = await fetch('http://localhost:11434/api/embeddings', {
-            method: 'POST',
-            body: JSON.stringify({
-                model: this.model,
-                prompt: text
-            })
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10_000);
+        try {
+            const response = await fetch('http://localhost:11434/api/embeddings', {
+                method: 'POST',
+                signal: controller.signal,
+                body: JSON.stringify({
+                    model: this.model,
+                    prompt: text
+                })
+            });
 
-        const data = await response.json();
-        if (!data.embedding) {
-            throw new Error(`Ollama Embedding Failed: ${JSON.stringify(data)}`);
+            const data = await response.json();
+            if (!data.embedding) {
+                throw new Error(`Ollama Embedding Failed: ${JSON.stringify(data)}`);
+            }
+            return new Float32Array(data.embedding);
+        } finally {
+            clearTimeout(timeout);
         }
-        return new Float32Array(data.embedding);
     }
 }
 

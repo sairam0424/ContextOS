@@ -14,6 +14,7 @@ export type WorkspaceEvent =
   | { type: 'agent.registered'; agentId: string; name: string }
   | { type: 'agent.deregistered'; agentId: string; reason: string }
   | { type: 'agent.quarantined'; agentId: string; reason: string }
+  | { type: 'agent.reactivated'; agentId: string; reason: string }
   | { type: 'message.sent'; from: string; to: string; intent: string }
   | { type: 'task.assigned'; taskId: string; agentId: string }
   | { type: 'task.completed'; taskId: string }

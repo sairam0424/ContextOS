@@ -54,6 +54,12 @@ export class AgentRegistry {
     log.warn({ agentId, reason }, 'Agent quarantined');
   }
 
+  reactivate(agentId: string, reason: string): void {
+    this.db.prepare(`UPDATE agents SET status = 'active' WHERE id = ?`).run(agentId);
+    this.eventBus.emit({ type: 'agent.reactivated', agentId, reason });
+    log.info({ agentId, reason }, 'Agent reactivated');
+  }
+
   getById(id: string): AgentRecord | undefined {
     const row = this.db.prepare(`SELECT * FROM agents WHERE id = ?`).get(id) as any;
     return row ? this.toRecord(row) : undefined;
