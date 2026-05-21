@@ -42,9 +42,9 @@ export class DatabaseService {
   public readonly config: ConfigRepository;
   public readonly symbols: SymbolsRepository;
 
-  constructor(workspaceRoot: string) {
-    const dbPath = path.join(workspaceRoot, '.context-db', 'context.db');
-    this.db = createConnection(dbPath);
+  constructor(workspaceRoot: string, dbPath?: string) {
+    const finalPath = dbPath ?? path.join(workspaceRoot, '.context-db', 'context.db');
+    this.db = createConnection(finalPath);
     initializeSchema(this.db);
     migrateSchema(this.db);
 
@@ -148,11 +148,13 @@ import { getWorkspaceRoot } from '../context.js';
 
 let _sharedInstance: DatabaseService | null = null;
 
+/**
+ * Returns a lazily-initialized shared DatabaseService singleton.
+ * Prefer `createContextOS()` factory for new code — this exists for backward compatibility.
+ */
 export function getSharedDatabase(): DatabaseService {
   if (!_sharedInstance) {
     _sharedInstance = new DatabaseService(getWorkspaceRoot());
   }
   return _sharedInstance;
 }
-
-export const databaseService = getSharedDatabase();

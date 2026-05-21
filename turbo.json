@@ -3,11 +3,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["src/**", "tsconfig.json", "package.json"],
       "outputs": ["dist/**"]
     },
     "test": {
       "dependsOn": ["build"],
-      "inputs": ["src/**/*.ts", "tests/**/*.ts"]
+      "inputs": ["src/**", "tsconfig.json", "package.json"],
+      "outputs": []
     },
     "validate": {
       "dependsOn": ["build"],

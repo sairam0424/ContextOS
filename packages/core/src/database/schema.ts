@@ -216,5 +216,17 @@ export function migrateSchema(db: RawDB): void {
   if (!qCols.has('retry_count')) db.exec(`ALTER TABLE intelligence_queue ADD COLUMN retry_count INTEGER DEFAULT 0`);
   if (!qCols.has('last_error')) db.exec(`ALTER TABLE intelligence_queue ADD COLUMN last_error TEXT`);
 
+  const taskCols = new Set((db.pragma('table_info(task_nodes)') as any[]).map((c: any) => c.name));
+  if (!taskCols.has('assigned_at')) db.exec(`ALTER TABLE task_nodes ADD COLUMN assigned_at INTEGER`);
+
+  // Performance indexes for common query patterns
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_access_path_ts ON access_log(path, timestamp)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_docs_status ON documents(status, intelligence_status)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_locks_expires ON locks(expires_at)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_agents_heartbeat ON agents(status, last_heartbeat)`);
+
   log.debug('Migrations complete');
 }

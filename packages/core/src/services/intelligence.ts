@@ -62,7 +62,7 @@ export class IntelligenceService {
               score,
               type: 'hybrid'
             } as SearchResult;
-          }).sort((a, b) => (b.score || 0) - (a.score || 0));
+          }).sort((a: SearchResult, b: SearchResult) => (b.score || 0) - (a.score || 0));
         }
       } catch (err) {
         log.error({ err }, 'Hybrid search failed, falling back to grep');

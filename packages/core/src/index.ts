@@ -20,8 +20,10 @@ export * from './services/federation.js';
 export * from './validation.js';
 
 export { ServiceContainer, TOKENS } from './container/index.js';
-export type { ServiceToken } from './container/index.js';
+export type { ServiceToken, Token } from './container/index.js';
 export { createDefaultContainer } from './container/index.js';
+export { createContextOS } from './factory.js';
+export type { ContextOS, ContextOSConfig } from './factory.js';
 export { WorkspaceEventBus } from './events/index.js';
 export type { WorkspaceEvent, EventType, EventPayload, EventHandler } from './events/index.js';
 
@@ -35,16 +37,58 @@ export { CircuitBreaker, AuditLog } from './resilience/index.js';
 export type { CircuitBreakerConfig, AuditEntry } from './resilience/index.js';
 
 /**
+ * Checks whether any component of targetPath (relative to rootPath) is a symlink.
+ * Walks from rootPath downward through each segment of the target.
+ */
+function containsSymlink(targetPath: string, rootPath: string): boolean {
+  const relative = path.relative(rootPath, targetPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return false;
+
+  const segments = relative.split(path.sep);
+  let current = rootPath;
+
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    try {
+      const stat = fs.lstatSync(current);
+      if (stat.isSymbolicLink()) return true;
+    } catch {
+      // Path segment does not exist yet; stop checking
+      break;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Validates that a path is within the workspace root and inside an allowed bucket.
  */
 export function validatePath(requestedPath: string) {
   const resolvedPath = path.resolve(workspaceRoot, requestedPath);
-  
+
   let fullPath: string;
   try {
     fullPath = fs.realpathSync(resolvedPath);
+
+    // TOCTOU guard: reject if the resolved target itself is a symlink
+    const lstat = fs.lstatSync(fullPath);
+    if (lstat.isSymbolicLink()) {
+      throw new Error(`Security violation: Path ${requestedPath} resolves through a symbolic link.`);
+    }
   } catch (e) {
+    if (e instanceof Error && e.message.includes('Security violation')) throw e;
+
+    // Path does not exist yet; walk parent segments to detect symlinks
     fullPath = resolvedPath;
+    if (containsSymlink(fullPath, workspaceRoot)) {
+      throw new Error(`Security violation: Path ${requestedPath} contains a symbolic link component.`);
+    }
+  }
+
+  // Additional symlink check on the full resolved path components
+  if (containsSymlink(fullPath, workspaceRoot)) {
+    throw new Error(`Security violation: Path ${requestedPath} contains a symbolic link component.`);
   }
 
   const relativePath = path.relative(workspaceRoot, fullPath);
@@ -60,7 +104,7 @@ export function validatePath(requestedPath: string) {
     const bucketRelative = path.relative(bucketRoot, fullPath);
     return !bucketRelative.startsWith("..") && !path.isAbsolute(bucketRelative);
   });
-  
+
   if (!isAllowed) {
     throw new Error(`Security violation: Path ${requestedPath} is outside the allowed bucket (projects, orgs, knowledge, schemas, etc).`);
   }

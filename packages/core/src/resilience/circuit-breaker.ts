@@ -5,11 +5,15 @@ const log = createChildLogger('circuit-breaker');
 
 interface ErrorRecord {
   timestamps: number[];
+  trippedAt?: number;
 }
+
+export type CircuitState = 'closed' | 'open' | 'half-open';
 
 export interface CircuitBreakerConfig {
   maxFailures: number;
   windowMs: number;
+  resetTimeoutMs: number;
 }
 
 export class CircuitBreaker {
@@ -20,11 +24,23 @@ export class CircuitBreaker {
     this.config = {
       maxFailures: config?.maxFailures ?? 5,
       windowMs: config?.windowMs ?? 60000,
+      resetTimeoutMs: config?.resetTimeoutMs ?? 30000,
     };
   }
 
   recordFailure(agentId: string): { tripped: boolean } {
     const now = Date.now();
+    const state = this.getState(agentId);
+
+    // In half-open state, a single failure re-trips immediately
+    if (state === 'half-open') {
+      const record = this.errors.get(agentId)!;
+      record.trippedAt = now;
+      this.registry.quarantine(agentId, 'Circuit breaker re-tripped: probe request failed in half-open state');
+      log.warn({ agentId }, 'Circuit breaker re-tripped from half-open state');
+      return { tripped: true };
+    }
+
     const cutoff = now - this.config.windowMs;
 
     if (!this.errors.has(agentId)) {
@@ -36,8 +52,8 @@ export class CircuitBreaker {
     record.timestamps.push(now);
 
     if (record.timestamps.length >= this.config.maxFailures) {
+      record.trippedAt = now;
       this.registry.quarantine(agentId, `Circuit breaker tripped: ${record.timestamps.length} failures in ${this.config.windowMs}ms`);
-      this.errors.delete(agentId);
       log.warn({ agentId, failures: record.timestamps.length }, 'Circuit breaker tripped');
       return { tripped: true };
     }
@@ -46,7 +62,36 @@ export class CircuitBreaker {
   }
 
   recordSuccess(agentId: string): void {
+    const state = this.getState(agentId);
+
+    if (state === 'half-open') {
+      // Probe succeeded — close the breaker and reactivate
+      this.errors.delete(agentId);
+      this.registry.reactivate(agentId, 'Circuit breaker probe succeeded');
+      log.info({ agentId }, 'Circuit breaker closed after successful probe');
+      return;
+    }
+
     this.errors.delete(agentId);
+  }
+
+  getState(agentId: string): CircuitState {
+    const record = this.errors.get(agentId);
+    if (!record || !record.trippedAt) {
+      return 'closed';
+    }
+
+    const elapsed = Date.now() - record.trippedAt;
+    if (elapsed >= this.config.resetTimeoutMs) {
+      return 'half-open';
+    }
+
+    return 'open';
+  }
+
+  canExecute(agentId: string): boolean {
+    const state = this.getState(agentId);
+    return state === 'closed' || state === 'half-open';
   }
 
   getFailureCount(agentId: string): number {

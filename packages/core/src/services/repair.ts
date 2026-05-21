@@ -117,23 +117,30 @@ export class SelfRepairService {
       Return ONLY the corrected file content. No conversation. No markdown code blocks.
     `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens }
-        })
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.1, maxOutputTokens }
+          })
+      });
 
-    const data = await response.json();
-    const repaired = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!repaired) {
-      throw new Error(`Gemini Error: ${JSON.stringify(data.error || "No response candidate")}`);
+      const data = await response.json();
+      const repaired = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!repaired) {
+        throw new Error(`Gemini Error: ${JSON.stringify(data.error || "No response candidate")}`);
+      }
+
+      return repaired.trim();
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return repaired.trim();
   }
 }
 

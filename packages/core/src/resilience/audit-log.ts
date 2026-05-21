@@ -41,22 +41,26 @@ export class AuditLog {
   }
 
   append(agentId: string, action: string, detail: Record<string, unknown> = {}): AuditEntry {
-    const id = randomUUID();
-    const timestamp = Date.now();
-    const sequence = this.nextSequence();
-    const prevHash = this.lastHash;
+    const txn = this.db.transaction(() => {
+      const id = randomUUID();
+      const timestamp = Date.now();
+      const sequence = this.nextSequence();
+      const prevHash = this.lastHash;
 
-    const content = `${id}:${agentId}:${action}:${JSON.stringify(detail)}:${timestamp}:${sequence}:${prevHash}`;
-    const hash = createHash('sha256').update(content).digest('hex');
+      const content = `${id}:${agentId}:${action}:${JSON.stringify(detail)}:${timestamp}:${sequence}:${prevHash}`;
+      const hash = createHash('sha256').update(content).digest('hex');
 
-    this.db.prepare(`
-      INSERT INTO audit_log (id, agent_id, action, detail, timestamp, sequence, prev_hash, hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, agentId, action, JSON.stringify(detail), timestamp, sequence, prevHash, hash);
+      this.db.prepare(`
+        INSERT INTO audit_log (id, agent_id, action, detail, timestamp, sequence, prev_hash, hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, agentId, action, JSON.stringify(detail), timestamp, sequence, prevHash, hash);
 
-    this.lastHash = hash;
+      this.lastHash = hash;
 
-    return { id, agentId, action, detail, timestamp, sequence, prevHash, hash };
+      return { id, agentId, action, detail, timestamp, sequence, prevHash, hash };
+    });
+
+    return txn();
   }
 
   getForAgent(agentId: string, limit: number = 50): AuditEntry[] {

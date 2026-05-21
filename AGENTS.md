@@ -74,16 +74,24 @@ Publish order (CI and manual): **Core -> CLI -> MCP** (sequential). Triggered by
 
 ## Git Hooks & CI
 
-- **Husky pre-commit + pre-push**: both run `npm run validate` (full build + workspace checks).
-- **GitHub Actions**: PR validation (`validate.yml`) and tag-based npm publish (`publish.yml`).
+- **Husky pre-commit + pre-push**: both run `npm run validate` (full build + workspace checks). Run `npm run prepare` after fresh clone to install hooks.
+- **GitHub Actions**: PR validation (`validate.yml` on PRs to main) and tag-based npm publish (`publish.yml` on `v*` tags). CI uses Node 22.
+
+## Agent Double-Hook Protocol
+
+Before starting work, read `AGENTS_LEARNING.md` to avoid repeating past mistakes. After completing work, append new learnings (patterns discovered, anti-patterns hit, architectural decisions made) to the same file.
 
 ## Commit Conventions
 
 Conventional commits with scoped prefixes:
 
 ```text
-feat(dashboard): description
-fix(core): description
-chore: description
-docs: description
+feat(core): description       # New functionality
+fix(core): description        # Bug fixes
+test(core): description       # Adding/updating tests
+refactor(core): description   # Restructuring without behavior change
+docs: description             # Documentation only
+chore: description            # Tooling, deps, config
 ```
+
+Scopes match workspace names: `core`, `dashboard`, `cli`, `mcp`. Omit scope for cross-cutting changes.
