@@ -24,7 +24,7 @@ export type { ServiceToken, Token } from './container/index.js';
 export { createDefaultContainer } from './container/index.js';
 export { createContextOS } from './factory.js';
 export type { ContextOS, ContextOSConfig } from './factory.js';
-export { WorkspaceEventBus } from './events/index.js';
+export { WorkspaceEventBus, EventStore } from './events/index.js';
 export type { WorkspaceEvent, EventType, EventPayload, EventHandler } from './events/index.js';
 
 export { AgentRegistry, MessageBus } from './agents/index.js';
