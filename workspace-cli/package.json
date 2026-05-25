@@ -1,6 +1,6 @@
 {
   "name": "@context-os/cli",
-  "version": "1.13.1",
+  "version": "1.13.2",
   "description": "Enterprise intelligence HUD and Spatial CLI for ContextOS",
   "keywords": [
     "context-os",
