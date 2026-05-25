@@ -38,6 +38,7 @@ export type { CircuitBreakerConfig, AuditEntry } from './resilience/index.js';
 
 export { MetricsCollector } from './metrics/index.js';
 export type { MetricsSnapshot } from './metrics/index.js';
+export { toPrometheusText } from './metrics/index.js';
 
 /**
  * Checks whether any component of targetPath (relative to rootPath) is a symlink.

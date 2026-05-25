@@ -15,9 +15,13 @@
  * Timeout: 30s request timeout.
  */
 import http from "node:http";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "./server.js";
+import { subscriptionManager } from "./subscriptions.js";
+import { toPrometheusText, MetricsCollector } from "@context-os/core";
 
 /* ─── Configuration ─────────────────────────────────────────────────── */
 
@@ -38,7 +42,23 @@ interface RateEntry {
   timestamps: number[];
 }
 
-const rateLimitMap = new Map<string, RateEntry>();
+const RATE_STATE_FILE = path.join(process.cwd(), '.context-db', 'rate-limits.json');
+
+function loadRateLimitState(): Map<string, RateEntry> {
+  try {
+    const data = JSON.parse(readFileSync(RATE_STATE_FILE, 'utf-8'));
+    return new Map(Object.entries(data));
+  } catch { return new Map(); }
+}
+
+function saveRateLimitState(map: Map<string, RateEntry>): void {
+  try {
+    mkdirSync(path.dirname(RATE_STATE_FILE), { recursive: true });
+    writeFileSync(RATE_STATE_FILE, JSON.stringify(Object.fromEntries(map)));
+  } catch { /* non-critical */ }
+}
+
+const rateLimitMap = loadRateLimitState();
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_AUTHENTICATED = 100;
 const RATE_LIMIT_UNAUTHENTICATED = 5;
@@ -54,7 +74,10 @@ function cleanupRateLimiter(): void {
 }
 
 // Periodic cleanup every 60s to prevent memory growth
-const rateLimitCleanupInterval = setInterval(cleanupRateLimiter, 60_000);
+const rateLimitCleanupInterval = setInterval(() => {
+  cleanupRateLimiter();
+  saveRateLimitState(rateLimitMap);
+}, 60_000);
 rateLimitCleanupInterval.unref();
 
 function isRateLimited(ip: string, isAuthenticated: boolean): boolean {
@@ -214,6 +237,16 @@ async function main() {
       return res.end(JSON.stringify({ error: "Request body too large" }));
     }
 
+    // Prometheus metrics endpoint
+    if (req.method === "GET" && new URL(req.url ?? "/", `http://${req.headers.host}`).pathname === "/metrics") {
+      const collector = new MetricsCollector();
+      const snapshot = collector.snapshot(); // TODO: wire shared DI container for real metrics
+      const text = toPrometheusText(snapshot);
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end(text);
+      return;
+    }
+
     // Health endpoint for deploy checks
     if (req.url === "/health" && req.method === "GET") {
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -231,6 +264,13 @@ async function main() {
           res.end(JSON.stringify({ error: "Internal Server Error" }));
         }
       }
+
+      // Session disconnect cleanup
+      res.on('close', () => {
+        const sessionId = res.getHeader('X-Request-Id') as string;
+        if (sessionId) subscriptionManager.cleanup(sessionId);
+      });
+
       return;
     }
 
