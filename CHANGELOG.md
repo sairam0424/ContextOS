@@ -2,6 +2,40 @@
 
 All notable changes to the ContextOS platform will be documented in this file.
 
+## [1.13.0] - 2026-05-25 — "Nexus"
+
+### Security
+- **API Key Header Migration**: Gemini API key moved from URL query param to `x-goog-api-key` HTTP header (prevents log leakage)
+- **LIKE Injection Prevention**: Escape `%` and `_` metacharacters in access log path filter queries
+- **HTTP Body Hardening**: Stream-accumulate request body with hard byte cutoff (replaces Content-Length-only check)
+
+### Added
+- **MCP Prompts**: 4 prompt templates — daily-standup, context-load, decision-review, mission-brief
+- **MCP Logging**: Structured `notifications/logging` messages to connected clients
+- **MCP Subscriptions**: Resource subscription manager with session cleanup and change notifications
+- **MCP Correlation**: X-Request-Id header on HTTP transport (echo client's or generate UUID)
+- **MCP graph_query Tool**: Traverse knowledge graph with depth, direction, weight filters
+- **MCP workspace_notify Tool**: Agent-to-agent messaging (send/read/broadcast via MessageBus)
+- **DI Container Lifecycle**: `start()` calls warmup on Warmable services, `stop()` disposes in reverse order
+- **Circuit Breaker Persistence**: State survives process restart via SQLite-backed storage
+- **Dead-Letter Queue**: TTL-expired messages moved to `dead_letters` table with `message.expired` event
+- **Event-Audit Bridge**: `task.failed`, `agent.quarantined`, `message.expired` auto-produce audit entries
+- **MetricsCollector**: In-process counters, histograms (p50/p95/p99), and gauges via DI singleton
+- **Capability-Based Routing**: Tasks declare `requiredCapabilities`; scheduler filters agents before assignment
+- **Task Priority**: Scheduler processes higher-priority tasks first
+- **Configurable Retry**: Exponential backoff with `RetryConfig` (replaces hardcoded maxRetries=2)
+- **CLI Shell Completion**: `context-os completion <bash|zsh|fish>` generates install-ready scripts
+- **CLI --json Flag**: Global structured output for all commands
+- **CLI --verbose Flag**: Debug-level output with timing info
+- **CLI --dry-run**: Report-only mode on prune and archive commands
+- **CLI Typo Suggestions**: Levenshtein-based command suggestions on unknown input
+
+### Performance
+- **Embedding Warmup**: Pre-load transformer model via container lifecycle (eliminates cold-start)
+- **Selective Column Fetch**: `getAllMetadata()` returns only path+mtime during reindex
+- **Bounded Graph CTE**: LIMIT clause on recursive affinity queries (default 100 results)
+- **Vector Cache Key**: Includes provider name to prevent stale results on model swap
+
 ## [1.12.0] - 2026-04-30 — "Nexus Consolidation"
 
 ### Fixed
