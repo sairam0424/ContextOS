@@ -130,6 +130,20 @@ function setCorsHeaders(req: http.IncomingMessage, res: http.ServerResponse): vo
 
 /* ─── Helpers ───────────────────────────────────────────────────────── */
 
+function collectBody(req: http.IncomingMessage, maxBytes: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    req.on('data', (chunk: Buffer) => {
+      totalBytes += chunk.length;
+      if (totalBytes > maxBytes) { req.destroy(); reject(new Error('Request body too large')); return; }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 function getClientIp(req: http.IncomingMessage): string {
   // Respect X-Forwarded-For only if behind a trusted proxy; default to socket address
   return (req.socket.remoteAddress ?? "unknown");
@@ -188,6 +202,10 @@ async function main() {
       res.writeHead(401, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ error: "Unauthorized" }));
     }
+
+    // Request correlation ID
+    const requestId = (req.headers['x-request-id'] as string) ?? randomUUID();
+    res.setHeader('X-Request-Id', requestId);
 
     // Request body size check (Content-Length based)
     const contentLength = parseInt(req.headers["content-length"] ?? "0", 10);

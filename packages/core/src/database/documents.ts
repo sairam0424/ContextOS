@@ -41,4 +41,8 @@ export class DocumentsRepository {
   getAll(): DBRecord[] {
     return this.db.prepare(`SELECT * FROM documents`).all() as DBRecord[];
   }
+
+  getAllMetadata(): Array<{ path: string; mtime: number }> {
+    return this.db.prepare('SELECT path, mtime FROM documents').all() as Array<{ path: string; mtime: number }>;
+  }
 }

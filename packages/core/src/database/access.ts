@@ -1,5 +1,9 @@
 import type { RawDB, AccessLogEntry } from './types.js';
 
+function escapeLikePattern(input: string): string {
+  return input.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+}
+
 export class AccessRepository {
   constructor(private db: RawDB) {}
 
@@ -20,7 +24,10 @@ export class AccessRepository {
 
   getLog(limit: number = 50, pathFilter?: string): AccessLogEntry[] {
     if (pathFilter) {
-      return this.db.prepare(`SELECT * FROM access_log WHERE path LIKE ? ORDER BY timestamp DESC LIMIT ?`).all('%' + pathFilter + '%', limit) as AccessLogEntry[];
+      const escaped = escapeLikePattern(pathFilter);
+      return this.db.prepare(
+        `SELECT * FROM access_log WHERE path LIKE ? ESCAPE '\\' ORDER BY timestamp DESC LIMIT ?`
+      ).all(`%${escaped}%`, limit) as AccessLogEntry[];
     }
     return this.db.prepare(`SELECT * FROM access_log ORDER BY timestamp DESC LIMIT ?`).all(limit) as AccessLogEntry[];
   }

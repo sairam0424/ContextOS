@@ -12,7 +12,12 @@ import { registerLockTools } from "./tools/lock.js";
 import { registerPruneTool } from "./tools/prune.js";
 import { registerPulseTool } from "./tools/pulse.js";
 import { registerMissionTool } from "./tools/mission.js";
+import { registerGraphQueryTool } from "./tools/graph-query.js";
+import { registerWorkspaceNotifyTool } from "./tools/workspace-notify.js";
 import { registerResources } from "./resources.js";
+import { registerPrompts } from "./prompts/index.js";
+import { setLoggingServer } from "./logging.js";
+import { subscriptionManager } from "./subscriptions.js";
 
 export async function createMcpServer(version: string): Promise<McpServer> {
   const server = new McpServer({
@@ -20,6 +25,13 @@ export async function createMcpServer(version: string): Promise<McpServer> {
     version,
   });
 
+  // Structured logging
+  setLoggingServer(server);
+
+  // Resource subscriptions
+  subscriptionManager.setServer(server);
+
+  // Tools
   registerReadTool(server);
   registerWriteTool(server);
   registerSearchTool(server);
@@ -33,7 +45,14 @@ export async function createMcpServer(version: string): Promise<McpServer> {
   registerPruneTool(server);
   registerPulseTool(server);
   registerMissionTool(server);
+  registerGraphQueryTool(server);
+  registerWorkspaceNotifyTool(server);
+
+  // Resources
   registerResources(server);
+
+  // Prompts
+  registerPrompts(server);
 
   return server;
 }
