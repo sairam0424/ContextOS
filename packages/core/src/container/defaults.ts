@@ -57,19 +57,30 @@ export function createDefaultContainer(): ServiceContainer {
   });
   container.register(TOKENS.Metrics, () => new MetricsCollector());
 
-  wireEventAuditBridge(container);
+  const cleanupAuditBridge = wireEventAuditBridge(container);
+  // Register a disposable that cleans up on container.stop()
+  container.register(Symbol.for('ctx:AuditBridgeCleanup') as any, () => ({
+    dispose: () => { cleanupAuditBridge(); }
+  }));
+  // Force-resolve to ensure it's in the instances map for stop() to find
+  container.resolve(Symbol.for('ctx:AuditBridgeCleanup') as any);
 
   return container;
 }
 
-function wireEventAuditBridge(container: ServiceContainer): void {
+function wireEventAuditBridge(container: ServiceContainer): () => void {
   const auditLog = container.resolve(TOKENS.AuditLog);
   const eventBus = container.resolve(TOKENS.EventBus);
   const AUDITED = ['task.failed', 'agent.quarantined', 'message.expired'] as const;
+  const unsubscribers: Array<() => void> = [];
+
   for (const eventType of AUDITED) {
-    eventBus.on(eventType as any, (event: any) => {
+    const unsub = eventBus.on(eventType as any, (event: any) => {
       const { type, ...detail } = event;
       auditLog.append('system', type, detail);
     });
+    unsubscribers.push(unsub);
   }
+
+  return () => { unsubscribers.forEach(fn => fn()); };
 }
