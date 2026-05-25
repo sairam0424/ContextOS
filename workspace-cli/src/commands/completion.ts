@@ -6,7 +6,7 @@ export function completionCommand(program: Command): void {
     .description('Generate shell completion script')
     .argument('<shell>', 'Shell type: bash, zsh, or fish')
     .action((shell: string) => {
-      const programName = 'context-os';
+      const programName = program.name();
       switch (shell) {
         case 'bash':
           console.log(generateBashCompletion(programName, program));
