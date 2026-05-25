@@ -4,6 +4,7 @@ import ora from "ora";
 import fs from "fs-extra";
 import path from "path";
 import { gitCommit } from "../utils.js";
+import { getOutputOpts, output, verbose } from '../utils/output.js';
 
 export function tagCommand(program: Command) {
   program
@@ -12,6 +13,8 @@ export function tagCommand(program: Command) {
     .argument("<file>", "Path to the file to tag")
     .argument("<tag>", "The new tag (e.g., #hot, #warm, #cold, #permanent)")
     .action(async (file, tag) => {
+      const opts = getOutputOpts(program);
+      verbose(`Tagging "${file}" with ${tag}`, opts);
       const spinner = ora(`Updating tag for ${chalk.cyan(file)} to ${chalk.yellow(tag)}...`).start();
       try {
         const workspaceRoot = process.cwd();
@@ -24,7 +27,7 @@ export function tagCommand(program: Command) {
 
         let content = await fs.readFile(filePath, "utf-8");
         const lifecycleTags = ["#hot", "#warm", "#cold", "#permanent"];
-        
+
         // Remove existing lifecycle tags
         lifecycleTags.forEach(t => {
           content = content.replace(new RegExp(`${t}(\\s*|\\n*)`, 'g'), '');
@@ -43,6 +46,11 @@ export function tagCommand(program: Command) {
         await gitCommit(file, `refactor(cli): update lifecycle tag of ${file} to ${tag}`);
 
         spinner.succeed(chalk.green(`File ${file} tagged with ${tag} successfully.`));
+
+        if (opts.json) {
+          output({ file, tag, success: true }, opts);
+          return;
+        }
       } catch (error: any) {
         spinner.fail(chalk.red(`Tagging failed: ${error.message}`));
       }

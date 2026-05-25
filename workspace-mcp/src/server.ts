@@ -18,6 +18,7 @@ import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts/index.js";
 import { setLoggingServer } from "./logging.js";
 import { subscriptionManager } from "./subscriptions.js";
+import { registerRoots } from "./roots.js";
 
 export async function createMcpServer(version: string): Promise<McpServer> {
   const server = new McpServer({
@@ -53,6 +54,9 @@ export async function createMcpServer(version: string): Promise<McpServer> {
 
   // Prompts
   registerPrompts(server);
+
+  // Roots
+  registerRoots(server);
 
   return server;
 }

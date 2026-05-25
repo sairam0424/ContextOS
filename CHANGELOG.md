@@ -2,6 +2,27 @@
 
 All notable changes to the ContextOS platform will be documented in this file.
 
+## [1.13.1] - 2026-05-25
+
+### Architecture
+- **Read Lock Persistence**: ConflictResolver read locks now persist to SQLite via `mode` column (removes volatile in-memory Map)
+- **Audit Log Pagination**: `verifyIntegrity()` processes in batches of 1000 (no full-table memory load, supports resumable verification)
+- **Event Bus WAL**: Events persisted to `event_log` table before handler dispatch; supports `replay()` after crash and `getSince()` for late subscribers
+
+### Performance
+- **Batch Embedding**: Gemini `batchEmbedContents` API processes 100 texts per call (~100x fewer HTTP round-trips during bulk indexing)
+
+### MCP Protocol
+- **Rate Limiter Persistence**: State flushed to file every 60s, restored on restart
+- **Roots Support**: `roots/list` returns workspace root URI for filesystem boundary declaration
+- **Progress Notifications**: `createProgressReporter` utility for long-running tool operations
+- **Session Cleanup**: Subscriptions automatically cleaned up on client disconnect
+- **Prometheus Metrics**: `GET /metrics` endpoint returns counters/histograms/gauges in Prometheus text format
+
+### CLI
+- **--json Output Wired**: 12 data-returning commands now respect `--json` flag for structured output
+- **Completion Fix**: Shell completion uses `program.name()` instead of hardcoded string
+
 ## [1.13.0] - 2026-05-25 — "Nexus"
 
 ### Security

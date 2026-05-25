@@ -1,4 +1,5 @@
 import type { WorkspaceEvent, EventType, EventPayload, EventHandler } from './types.js';
+import type { EventStore } from './event-store.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('event-bus');
@@ -10,6 +11,11 @@ const MAX_CONSECUTIVE_FAILURES = 5;
 export class WorkspaceEventBus {
   private handlers = new Map<string, Set<EventHandler<any>>>();
   private handlerFailures = new WeakMap<EventHandler<any>, number>();
+  private store?: EventStore;
+
+  constructor(store?: EventStore) {
+    this.store = store;
+  }
 
   on<T extends EventType>(type: T, handler: EventHandler<T>): Unsubscribe {
     if (!this.handlers.has(type)) {
@@ -42,6 +48,8 @@ export class WorkspaceEventBus {
   }
 
   emit(event: WorkspaceEvent): void {
+    this.store?.append(event);
+
     const handlers = this.handlers.get(event.type);
     if (!handlers) return;
     for (const handler of handlers) {
@@ -55,6 +63,8 @@ export class WorkspaceEventBus {
   }
 
   async emitAsync(event: WorkspaceEvent): Promise<void> {
+    this.store?.append(event);
+
     const handlers = this.handlers.get(event.type);
     if (!handlers) return;
 
@@ -72,6 +82,28 @@ export class WorkspaceEventBus {
     );
 
     await Promise.all(promises);
+  }
+
+  replay(): number {
+    if (!this.store) return 0;
+    const unreplayed = this.store.getUnreplayed();
+    let count = 0;
+    for (const { id, event } of unreplayed) {
+      const handlers = this.handlers.get(event.type);
+      if (handlers) {
+        for (const handler of handlers) {
+          try {
+            handler(event as any);
+            this.handlerFailures.set(handler, 0);
+          } catch (err) {
+            this.trackHandlerFailure(event.type, handler, err);
+          }
+        }
+      }
+      this.store.markReplayed(id);
+      count++;
+    }
+    return count;
   }
 
   listenerCount(type: EventType): number {

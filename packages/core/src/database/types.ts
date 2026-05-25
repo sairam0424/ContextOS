@@ -26,6 +26,7 @@ export interface LockRecord {
   agent_id: string;
   expires_at: number;
   created_at: number;
+  mode: 'read' | 'write';
 }
 
 export interface MissionRecord {

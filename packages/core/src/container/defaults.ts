@@ -1,7 +1,7 @@
 import { ServiceContainer } from './container.js';
 import { TOKENS } from './tokens.js';
 import { getSharedDatabase } from '../database/index.js';
-import { WorkspaceEventBus } from '../events/index.js';
+import { WorkspaceEventBus, EventStore } from '../events/index.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { MessageBus } from '../agents/message-bus.js';
 import { TaskGraph } from '../orchestration/task-graph.js';
@@ -18,8 +18,15 @@ import { MetricsCollector } from '../metrics/index.js';
 export function createDefaultContainer(): ServiceContainer {
   const container = new ServiceContainer();
 
-  container.register(TOKENS.EventBus, () => new WorkspaceEventBus());
   container.register(TOKENS.Database, () => getSharedDatabase());
+  container.register(TOKENS.EventStore, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    return new EventStore(db.getRawDb());
+  });
+  container.register(TOKENS.EventBus, (c) => {
+    const store = c.resolve(TOKENS.EventStore);
+    return new WorkspaceEventBus(store);
+  });
   container.register(TOKENS.AgentRegistry, (c) => {
     const db = c.resolve(TOKENS.Database);
     const bus = c.resolve(TOKENS.EventBus);

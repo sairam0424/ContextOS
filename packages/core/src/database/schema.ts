@@ -220,6 +220,17 @@ export function initializeSchema(db: RawDB): void {
   `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_dead_letters_sender ON dead_letters(sender_id)`);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS event_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      timestamp INTEGER NOT NULL,
+      replayed INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_event_log_type ON event_log(type, timestamp)`);
+
   log.debug('Schema initialization complete');
 }
 
@@ -246,6 +257,11 @@ export function migrateSchema(db: RawDB): void {
   if (!taskCols.has('priority')) db.exec(`ALTER TABLE task_nodes ADD COLUMN priority INTEGER NOT NULL DEFAULT 0`);
   if (!taskCols.has('required_capabilities')) db.exec(`ALTER TABLE task_nodes ADD COLUMN required_capabilities TEXT DEFAULT '[]'`);
   if (!taskCols.has('retry_config')) db.exec(`ALTER TABLE task_nodes ADD COLUMN retry_config TEXT`);
+
+  const lockCols = db.pragma('table_info(locks)') as any[];
+  if (!lockCols.find((c: any) => c.name === 'mode')) {
+    db.exec(`ALTER TABLE locks ADD COLUMN mode TEXT NOT NULL DEFAULT 'write'`);
+  }
 
   // Performance indexes for common query patterns
   db.exec(`CREATE INDEX IF NOT EXISTS idx_access_path_ts ON access_log(path, timestamp)`);

@@ -1,6 +1,7 @@
 import type { Token } from './container.js';
 import type { DatabaseService } from '../database/index.js';
 import type { WorkspaceEventBus } from '../events/event-bus.js';
+import type { EventStore } from '../events/event-store.js';
 import type { AgentRegistry } from '../agents/registry.js';
 import type { MessageBus } from '../agents/message-bus.js';
 import type { TaskGraph } from '../orchestration/task-graph.js';
@@ -13,6 +14,7 @@ import type { MetricsCollector } from '../metrics/collector.js';
 export const TOKENS = {
   Database: Symbol.for('ctx:Database') as Token<DatabaseService>,
   EventBus: Symbol.for('ctx:EventBus') as Token<WorkspaceEventBus>,
+  EventStore: Symbol.for('ctx:EventStore') as Token<EventStore>,
   Intelligence: Symbol.for('ctx:Intelligence') as Token<unknown>,
   IntelligenceQueue: Symbol.for('ctx:IntelligenceQueue') as Token<unknown>,
   KnowledgeGraph: Symbol.for('ctx:KnowledgeGraph') as Token<unknown>,

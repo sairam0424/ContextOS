@@ -11,49 +11,38 @@ export interface LockRequest {
 }
 
 export class ConflictResolver {
-  private locks: LocksRepository;
-  // In-memory only by design — read locks are advisory and volatile across restarts.
-  // Write locks persist via LocksRepository (SQLite). This asymmetry is intentional
-  // for single-process use; multi-process requires DB-backed readers.
-  private readers: Map<string, Set<string>> = new Map();
+  private locksRepo: LocksRepository;
 
   constructor(private db: RawDB) {
-    this.locks = new LocksRepository(db);
+    this.locksRepo = new LocksRepository(db);
   }
 
   acquireRead(path: string, agentId: string): boolean {
-    const existingLock = this.locks.get(path);
-    if (existingLock && existingLock.agent_id !== agentId) {
-      log.debug({ path, agentId, holder: existingLock.agent_id }, 'Read blocked by write lock');
+    const acquired = this.locksRepo.acquire(path, agentId, 300_000, 'read');
+    if (!acquired) {
+      log.debug({ path, agentId }, 'Read lock blocked by write lock');
       return false;
     }
-
-    if (!this.readers.has(path)) {
-      this.readers.set(path, new Set());
-    }
-    this.readers.get(path)!.add(agentId);
     log.debug({ path, agentId }, 'Read lock acquired');
     return true;
   }
 
   acquireWrite(path: string, agentId: string): boolean {
-    const readers = this.readers.get(path);
-    if (readers && readers.size > 0) {
-      const otherReaders = new Set(readers);
-      otherReaders.delete(agentId);
-      if (otherReaders.size > 0) {
-        log.debug({ path, agentId, readers: [...otherReaders] }, 'Write blocked by readers');
-        return false;
-      }
+    // Check for other readers in the DB
+    const readers = this.locksRepo.getReaders(path);
+    const otherReaders = readers.filter(id => id !== agentId);
+    if (otherReaders.length > 0) {
+      log.debug({ path, agentId, readers: otherReaders }, 'Write blocked by readers');
+      return false;
     }
 
-    const existingLock = this.locks.get(path);
+    const existingLock = this.locksRepo.get(path);
     if (existingLock && existingLock.agent_id !== agentId) {
       log.debug({ path, agentId, holder: existingLock.agent_id }, 'Write blocked by another writer');
       return false;
     }
 
-    const acquired = this.locks.acquire(path, agentId);
+    const acquired = this.locksRepo.acquire(path, agentId);
     if (!acquired) {
       log.debug({ path, agentId }, 'Write lock acquire failed at DB layer');
       return false;
@@ -63,39 +52,36 @@ export class ConflictResolver {
   }
 
   upgradeToWrite(path: string, agentId: string): boolean {
-    const readers = this.readers.get(path);
-    if (!readers || !readers.has(agentId)) {
+    const readers = this.locksRepo.getReaders(path);
+    const hasOwnRead = readers.includes(agentId);
+
+    if (!hasOwnRead) {
       return this.acquireWrite(path, agentId);
     }
 
-    const otherReaders = new Set(readers);
-    otherReaders.delete(agentId);
-    if (otherReaders.size > 0) {
+    const otherReaders = readers.filter(id => id !== agentId);
+    if (otherReaders.length > 0) {
       log.debug({ path, agentId }, 'Cannot upgrade — other readers present');
       return false;
     }
 
-    readers.delete(agentId);
+    // Release own read lock before acquiring write
+    this.locksRepo.release(path, agentId);
     return this.acquireWrite(path, agentId);
   }
 
   release(path: string, agentId: string): void {
-    const readers = this.readers.get(path);
-    if (readers) {
-      readers.delete(agentId);
-      if (readers.size === 0) this.readers.delete(path);
-    }
-    this.locks.release(path, agentId);
+    this.locksRepo.release(path, agentId);
     log.debug({ path, agentId }, 'Lock released');
   }
 
   getHolder(path: string): { agentId: string; mode: 'read' | 'write' } | null {
-    const lock = this.locks.get(path);
+    const lock = this.locksRepo.get(path);
     if (lock) return { agentId: lock.agent_id, mode: 'write' };
 
-    const readers = this.readers.get(path);
-    if (readers && readers.size > 0) {
-      return { agentId: [...readers][0], mode: 'read' };
+    const readers = this.locksRepo.getReaders(path);
+    if (readers.length > 0) {
+      return { agentId: readers[0], mode: 'read' };
     }
     return null;
   }

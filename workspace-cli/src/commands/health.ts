@@ -3,18 +3,21 @@ import chalk from "chalk";
 import ora from "ora";
 import fs from "fs-extra";
 import path from "path";
+import { getOutputOpts, output, verbose } from '../utils/output.js';
 
 export function healthCommand(program: Command) {
   program
     .command("health")
     .description("Perform a workspace integrity audit")
     .action(async () => {
+      const opts = getOutputOpts(program);
+      verbose('Running workspace health audit', opts);
       const spinner = ora("Auditing workspace health...").start();
       try {
         const workspaceRoot = process.cwd();
         const projectsDir = path.join(workspaceRoot, "projects");
-        const issuesFound = [];
-        const staleFiles = [];
+        const issuesFound: string[] = [];
+        const staleFiles: string[] = [];
 
         if (!(await fs.pathExists(projectsDir))) {
           spinner.fail(chalk.red("Projects directory not found."));
@@ -62,14 +65,20 @@ export function healthCommand(program: Command) {
           }
         }
 
+        if (opts.json) {
+          output({ issues: issuesFound, staleFiles, issueCount: issuesFound.length, staleCount: staleFiles.length }, opts);
+          spinner.stop();
+          return;
+        }
+
         if (issuesFound.length > 0 || staleFiles.length > 0) {
           spinner.warn(chalk.yellow(`Workspace audit complete: Found ${issuesFound.length} issues and ${staleFiles.length} stale tags.`));
-          
+
           if (issuesFound.length > 0) {
             console.log(chalk.red("\nCritical Issues:"));
             issuesFound.forEach((issue) => console.log(`- ${issue}`));
           }
-          
+
           if (staleFiles.length > 0) {
             console.log(chalk.yellow("\nStale Context Warnings:"));
             staleFiles.forEach((stale) => console.log(`- ${stale}`));

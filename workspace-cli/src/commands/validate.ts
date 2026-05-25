@@ -2,15 +2,25 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import { validationService } from "@context-os/core";
+import { getOutputOpts, output, verbose } from '../utils/output.js';
 
 export function validateCommand(program: Command) {
   program
     .command("validate")
     .description("Validate workspace files against JSON schemas")
     .action(async () => {
+      const opts = getOutputOpts(program);
+      verbose('Validating workspace integrity against schemas', opts);
       const spinner = ora("Validating workspace integrity...").start();
       try {
         const result = await validationService.validateWorkspace();
+
+        if (opts.json) {
+          output(result, opts);
+          spinner.stop();
+          if (!result.valid) process.exit(1);
+          return;
+        }
 
         if (result.valid) {
           spinner.succeed(chalk.green("Workspace validation successful! All files conform to schema."));

@@ -3,6 +3,7 @@ import { pipeline, Pipeline } from '@xenova/transformers';
 export interface EmbeddingProvider {
     name: string;
     generate(text: string): Promise<Float32Array>;
+    generateBatch?(texts: string[]): Promise<Float32Array[]>;
     dimension: number;
     warmup?(): Promise<void>;
 }
@@ -64,6 +65,36 @@ export class GeminiProvider implements EmbeddingProvider {
             clearTimeout(timeout);
         }
     }
+
+    async generateBatch(texts: string[]): Promise<Float32Array[]> {
+        if (!this.apiKey) throw new Error('Gemini API key required');
+        const BATCH_SIZE = 100;
+        const results: Float32Array[] = [];
+        for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+            const batch = texts.slice(i, i + BATCH_SIZE);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 30_000);
+            try {
+                const response = await fetch(
+                    'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents',
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
+                        signal: controller.signal,
+                        body: JSON.stringify({
+                            requests: batch.map(text => ({ model: 'models/text-embedding-004', content: { parts: [{ text }] } })),
+                        }),
+                    }
+                );
+                const data = await response.json() as any;
+                if (!data.embeddings) throw new Error(`Batch failed: ${JSON.stringify(data)}`);
+                for (const emb of data.embeddings) results.push(new Float32Array(emb.values));
+            } finally {
+                clearTimeout(timeout);
+            }
+        }
+        return results;
+    }
 }
 
 export class OllamaProvider implements EmbeddingProvider {
@@ -122,6 +153,13 @@ export class EmbeddingService {
 
     async generate(text: string): Promise<Float32Array> {
         return this.provider.generate(text);
+    }
+
+    async generateBatch(texts: string[]): Promise<Float32Array[]> {
+        if (this.provider.generateBatch) {
+            return this.provider.generateBatch(texts);
+        }
+        return Promise.all(texts.map(t => this.generate(t)));
     }
 
     async warmup(): Promise<void> {

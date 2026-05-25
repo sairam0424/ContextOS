@@ -47,8 +47,7 @@ export class AuditLog {
       const sequence = this.nextSequence();
       const prevHash = this.lastHash;
 
-      const content = `${id}:${agentId}:${action}:${JSON.stringify(detail)}:${timestamp}:${sequence}:${prevHash}`;
-      const hash = createHash('sha256').update(content).digest('hex');
+      const hash = this.computeHash({ id, agent_id: agentId, action, detail: JSON.stringify(detail), timestamp, sequence, prev_hash: prevHash }, prevHash);
 
       this.db.prepare(`
         INSERT INTO audit_log (id, agent_id, action, detail, timestamp, sequence, prev_hash, hash)
@@ -70,26 +69,45 @@ export class AuditLog {
     return rows.map(r => this.toEntry(r));
   }
 
-  verifyIntegrity(): { valid: boolean; brokenAt?: string } {
-    const rows = this.db.prepare(`SELECT * FROM audit_log ORDER BY sequence ASC`).all() as any[];
-    let expectedPrevHash = '0'.repeat(64);
+  verifyIntegrity(options?: { batchSize?: number; fromSequence?: number }): { valid: boolean; brokenAt?: string; lastVerifiedSequence: number } {
+    const batchSize = options?.batchSize ?? 1000;
+    let offset = options?.fromSequence ?? 0;
+    let prevHash = '';
 
-    for (const row of rows) {
-      if (row.prev_hash !== expectedPrevHash) {
-        return { valid: false, brokenAt: row.id };
-      }
-
-      const content = `${row.id}:${row.agent_id}:${row.action}:${row.detail}:${row.timestamp}:${row.sequence}:${row.prev_hash}`;
-      const computedHash = createHash('sha256').update(content).digest('hex');
-
-      if (computedHash !== row.hash) {
-        return { valid: false, brokenAt: row.id };
-      }
-
-      expectedPrevHash = row.hash;
+    if (offset > 0) {
+      const prev = this.db.prepare('SELECT hash FROM audit_log WHERE sequence = ?').get(offset) as any;
+      if (prev) prevHash = prev.hash;
+    } else {
+      prevHash = '0'.repeat(64);
     }
 
-    return { valid: true };
+    while (true) {
+      const batch = this.db.prepare(
+        'SELECT * FROM audit_log WHERE sequence > ? ORDER BY sequence ASC LIMIT ?'
+      ).all(offset, batchSize) as any[];
+      if (batch.length === 0) break;
+
+      for (const entry of batch) {
+        if (entry.prev_hash !== prevHash) {
+          return { valid: false, brokenAt: entry.id, lastVerifiedSequence: offset };
+        }
+
+        const computed = this.computeHash(entry, prevHash);
+        if (entry.hash !== computed) {
+          return { valid: false, brokenAt: entry.id, lastVerifiedSequence: offset };
+        }
+
+        prevHash = entry.hash;
+        offset = entry.sequence;
+      }
+    }
+
+    return { valid: true, lastVerifiedSequence: offset };
+  }
+
+  private computeHash(entry: any, prevHash: string): string {
+    const content = `${entry.id}:${entry.agent_id}:${entry.action}:${entry.detail}:${entry.timestamp}:${entry.sequence}:${prevHash}`;
+    return createHash('sha256').update(content).digest('hex');
   }
 
   private getLastHash(): string {
