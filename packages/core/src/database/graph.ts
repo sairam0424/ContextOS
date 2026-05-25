@@ -40,7 +40,7 @@ export class GraphRepository {
     return this.db.prepare(`SELECT * FROM edges`).all();
   }
 
-  getAffinities(nodePath: string, maxHops: number = 3, minWeight: number = 0.05): Map<string, number> {
+  getAffinities(nodePath: string, maxHops: number = 3, minWeight: number = 0.05, maxResults: number = 100): Map<string, number> {
     const stmt = this.db.prepare(`
       WITH RECURSIVE walk(node, depth, weight) AS (
         SELECT target, 1, weight FROM edges WHERE source = ?
@@ -51,9 +51,11 @@ export class GraphRepository {
         WHERE w.depth < ? AND w.weight * e.weight * 0.4 > ?
       )
       SELECT node, MAX(weight) as affinity FROM walk GROUP BY node
+      ORDER BY affinity DESC
+      LIMIT ?
     `);
 
-    const rows = stmt.all(nodePath, maxHops, minWeight) as any[];
+    const rows = stmt.all(nodePath, maxHops, minWeight, maxResults) as any[];
     const affinities = new Map<string, number>();
     rows.forEach(r => affinities.set(r.node, r.affinity));
     return affinities;

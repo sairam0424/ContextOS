@@ -3,6 +3,7 @@ import { TaskGraph } from './task-graph.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { MessageBus } from '../agents/message-bus.js';
 import type { WorkspaceEventBus } from '../events/index.js';
+import type { AgentRecord } from '../agents/types.js';
 import type { TaskNode } from './types.js';
 import { createChildLogger } from '../logger.js';
 
@@ -24,26 +25,47 @@ export class TaskScheduler {
     const ready = this.graph.getReady(missionId);
     if (ready.length === 0) return null;
 
-    const agents = this.registry.getActive();
-    if (agents.length === 0) {
+    // Sort ready tasks by priority DESC (highest priority first)
+    const sortedTasks = [...ready].sort((a, b) => b.priority - a.priority);
+
+    const allAgents = this.registry.getActive();
+    if (allAgents.length === 0) {
       log.warn({ missionId }, 'No active agents available');
       return null;
     }
 
-    // Least-loaded selection: pick agent with fewest currently-assigned tasks
+    // Least-loaded selection helper
     const agentTaskCounts = new Map<string, number>();
-    for (const a of agents) {
+    for (const a of allAgents) {
       const row = this.db.prepare(
         `SELECT COUNT(*) as count FROM task_nodes WHERE assigned_to = ? AND status = 'assigned'`
       ).get(a.id) as { count: number } | undefined;
       agentTaskCounts.set(a.id, row?.count ?? 0);
     }
-    const sortedAgents = [...agents].sort((a, b) =>
-      (agentTaskCounts.get(a.id) ?? 0) - (agentTaskCounts.get(b.id) ?? 0)
-    );
-    const agent = sortedAgents[0];
 
-    for (const task of ready) {
+    for (const task of sortedTasks) {
+      // Filter agents by required capabilities if specified
+      let candidates: AgentRecord[];
+      if (task.requiredCapabilities.length > 0) {
+        candidates = allAgents.filter(agent =>
+          task.requiredCapabilities.every(cap =>
+            agent.capabilities.some(ac => ac.toLowerCase().includes(cap.toLowerCase()))
+          )
+        );
+        if (candidates.length === 0) {
+          log.debug({ taskId: task.id, requiredCapabilities: task.requiredCapabilities }, 'No agents match required capabilities');
+          continue;
+        }
+      } else {
+        candidates = allAgents;
+      }
+
+      // Pick least-loaded from matching candidates
+      const sortedCandidates = [...candidates].sort((a, b) =>
+        (agentTaskCounts.get(a.id) ?? 0) - (agentTaskCounts.get(b.id) ?? 0)
+      );
+      const agent = sortedCandidates[0];
+
       const assigned = this.graph.assign(task.id, agent.id);
       if (!assigned) {
         log.debug({ taskId: task.id }, 'Task already claimed, trying next');
@@ -57,7 +79,7 @@ export class TaskScheduler {
         payload: { taskId: task.id, title: task.title, description: task.description },
       });
 
-      log.info({ taskId: task.id, agentId: agent.id }, 'Task assigned');
+      log.info({ taskId: task.id, agentId: agent.id, priority: task.priority }, 'Task assigned');
       return this.graph.getTask(task.id)!;
     }
 

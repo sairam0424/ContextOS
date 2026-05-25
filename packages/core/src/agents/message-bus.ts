@@ -31,6 +31,33 @@ export class MessageBus {
 
   getUndelivered(agentId: string): AgentMessage[] {
     const now = Date.now();
+
+    // First, find and move expired messages to dead_letters
+    const expiredRows = this.db.prepare(`
+      SELECT * FROM agent_messages
+      WHERE to_agent = ? AND delivered_at IS NULL
+      AND ttl IS NOT NULL AND (timestamp + ttl * 1000) <= ?
+      ORDER BY timestamp ASC
+    `).all(agentId, now) as any[];
+
+    for (const row of expiredRows) {
+      try {
+        const deadId = randomUUID();
+        this.db.prepare(`
+          INSERT INTO dead_letters (id, original_id, sender_id, target_id, topic, content, expired_at, reason)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'ttl_expired')
+        `).run(deadId, row.id, row.from_agent, row.to_agent, row.intent, row.payload, now);
+
+        this.db.prepare(`DELETE FROM agent_messages WHERE id = ?`).run(row.id);
+
+        this.eventBus.emit({ type: 'message.expired', messageId: row.id, topic: row.intent });
+        log.debug({ messageId: row.id, intent: row.intent }, 'Message expired, moved to dead-letter queue');
+      } catch {
+        // Dead-letter storage failure should not break message delivery
+      }
+    }
+
+    // Then return only valid (non-expired) undelivered messages
     const rows = this.db.prepare(`
       SELECT * FROM agent_messages
       WHERE to_agent = ? AND delivered_at IS NULL

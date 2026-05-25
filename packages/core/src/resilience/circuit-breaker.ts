@@ -1,4 +1,5 @@
 import type { AgentRegistry } from '../agents/registry.js';
+import type { RawDB } from '../database/types.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('circuit-breaker');
@@ -20,7 +21,11 @@ export class CircuitBreaker {
   private errors = new Map<string, ErrorRecord>();
   private config: CircuitBreakerConfig;
 
-  constructor(private registry: AgentRegistry, config?: Partial<CircuitBreakerConfig>) {
+  constructor(
+    private registry: AgentRegistry,
+    config?: Partial<CircuitBreakerConfig>,
+    private db?: RawDB
+  ) {
     this.config = {
       maxFailures: config?.maxFailures ?? 5,
       windowMs: config?.windowMs ?? 60000,
@@ -38,6 +43,7 @@ export class CircuitBreaker {
       record.trippedAt = now;
       this.registry.quarantine(agentId, 'Circuit breaker re-tripped: probe request failed in half-open state');
       log.warn({ agentId }, 'Circuit breaker re-tripped from half-open state');
+      this.persistState(agentId);
       return { tripped: true };
     }
 
@@ -55,9 +61,11 @@ export class CircuitBreaker {
       record.trippedAt = now;
       this.registry.quarantine(agentId, `Circuit breaker tripped: ${record.timestamps.length} failures in ${this.config.windowMs}ms`);
       log.warn({ agentId, failures: record.timestamps.length }, 'Circuit breaker tripped');
+      this.persistState(agentId);
       return { tripped: true };
     }
 
+    this.persistState(agentId);
     return { tripped: false };
   }
 
@@ -69,13 +77,16 @@ export class CircuitBreaker {
       this.errors.delete(agentId);
       this.registry.reactivate(agentId, 'Circuit breaker probe succeeded');
       log.info({ agentId }, 'Circuit breaker closed after successful probe');
+      this.persistState(agentId);
       return;
     }
 
     this.errors.delete(agentId);
+    this.persistState(agentId);
   }
 
   getState(agentId: string): CircuitState {
+    this.restoreState(agentId);
     const record = this.errors.get(agentId);
     if (!record || !record.trippedAt) {
       return 'closed';
@@ -90,6 +101,7 @@ export class CircuitBreaker {
   }
 
   canExecute(agentId: string): boolean {
+    this.restoreState(agentId);
     const state = this.getState(agentId);
     return state === 'closed' || state === 'half-open';
   }
@@ -105,5 +117,41 @@ export class CircuitBreaker {
 
   reset(agentId: string): void {
     this.errors.delete(agentId);
+    this.persistState(agentId);
+  }
+
+  private persistState(agentId: string): void {
+    if (!this.db) return;
+    const record = this.errors.get(agentId);
+    const now = Date.now();
+
+    if (!record) {
+      this.db.prepare(`
+        INSERT OR REPLACE INTO circuit_breaker_state (id, state, tripped_at, error_count, last_error, updated_at)
+        VALUES (?, 'closed', NULL, 0, NULL, ?)
+      `).run(agentId, now);
+      return;
+    }
+
+    const state = record.trippedAt
+      ? (Date.now() - record.trippedAt >= this.config.resetTimeoutMs ? 'half-open' : 'open')
+      : 'closed';
+
+    this.db.prepare(`
+      INSERT OR REPLACE INTO circuit_breaker_state (id, state, tripped_at, error_count, last_error, updated_at)
+      VALUES (?, ?, ?, ?, NULL, ?)
+    `).run(agentId, state, record.trippedAt ?? null, record.timestamps.length, now);
+  }
+
+  private restoreState(agentId: string): void {
+    if (!this.db || this.errors.has(agentId)) return;
+    const row = this.db.prepare(`SELECT * FROM circuit_breaker_state WHERE id = ?`).get(agentId) as any;
+    if (!row || row.state === 'closed') return;
+    // Only restore the trip state, not fabricated timestamps
+    // Use trippedAt as a single timestamp marker
+    this.errors.set(agentId, {
+      timestamps: row.tripped_at ? [row.tripped_at] : [],
+      trippedAt: row.tripped_at ?? undefined,
+    });
   }
 }

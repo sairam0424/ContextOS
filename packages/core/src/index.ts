@@ -31,10 +31,13 @@ export { AgentRegistry, MessageBus } from './agents/index.js';
 export type { AgentRecord, RegisterOpts, AgentMessage, SendMessageOpts, AgentStatus } from './agents/index.js';
 
 export { TaskGraph, TaskScheduler, ConflictResolver } from './orchestration/index.js';
-export type { TaskNode, TaskStatus, CreateTaskOpts, MissionProgress, LockRequest } from './orchestration/index.js';
+export type { TaskNode, TaskStatus, CreateTaskOpts, MissionProgress, LockRequest, RetryConfig } from './orchestration/index.js';
 
 export { CircuitBreaker, AuditLog } from './resilience/index.js';
 export type { CircuitBreakerConfig, AuditEntry } from './resilience/index.js';
+
+export { MetricsCollector } from './metrics/index.js';
+export type { MetricsSnapshot } from './metrics/index.js';
 
 /**
  * Checks whether any component of targetPath (relative to rootPath) is a symlink.

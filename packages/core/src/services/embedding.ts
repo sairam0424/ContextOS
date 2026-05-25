@@ -4,6 +4,7 @@ export interface EmbeddingProvider {
     name: string;
     generate(text: string): Promise<Float32Array>;
     dimension: number;
+    warmup?(): Promise<void>;
 }
 
 export class TransformersProvider implements EmbeddingProvider {
@@ -11,13 +12,21 @@ export class TransformersProvider implements EmbeddingProvider {
     dimension = 384;
     private extractor: any = null;
 
-    async generate(text: string): Promise<Float32Array> {
+    private async getOrLoadModel(): Promise<any> {
         if (!this.extractor) {
             this.extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
         }
+        return this.extractor;
+    }
 
-        const output = await this.extractor(text, { pooling: 'mean', normalize: true });
+    async generate(text: string): Promise<Float32Array> {
+        const extractor = await this.getOrLoadModel();
+        const output = await extractor(text, { pooling: 'mean', normalize: true });
         return new Float32Array(output.data);
+    }
+
+    async warmup(): Promise<void> {
+        try { await this.getOrLoadModel(); } catch { /* swallow - lazy load retry */ }
     }
 }
 
@@ -31,12 +40,15 @@ export class GeminiProvider implements EmbeddingProvider {
     }
 
     async generate(text: string): Promise<Float32Array> {
+        if (!this.apiKey) {
+            throw new Error('Gemini API key is required but not configured');
+        }
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10_000);
         try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${this.apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
                 signal: controller.signal,
                 body: JSON.stringify({
                     content: { parts: [{ text }] }
@@ -110,6 +122,12 @@ export class EmbeddingService {
 
     async generate(text: string): Promise<Float32Array> {
         return this.provider.generate(text);
+    }
+
+    async warmup(): Promise<void> {
+        if (this.provider && 'warmup' in this.provider && typeof (this.provider as any).warmup === 'function') {
+            await (this.provider as any).warmup();
+        }
     }
 }
 

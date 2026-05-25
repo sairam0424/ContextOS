@@ -1,4 +1,18 @@
 /**
+ * A service that can be gracefully torn down.
+ */
+export interface Disposable {
+  dispose(): Promise<void> | void;
+}
+
+/**
+ * A service that supports eager initialization / warmup.
+ */
+export interface Warmable {
+  warmup(): Promise<void> | void;
+}
+
+/**
  * Branded token type for type-safe dependency injection.
  * The phantom `__type` field carries the resolved service type at compile time.
  */
@@ -45,6 +59,49 @@ export class ServiceContainer {
 
   createScope(): ServiceContainer {
     return new ServiceContainer(this);
+  }
+
+  /**
+   * Start the container: calls warmup() on all resolved instances that implement Warmable.
+   */
+  async start(): Promise<void> {
+    for (const instance of this.instances.values()) {
+      if (this.isWarmable(instance)) {
+        await instance.warmup();
+      }
+    }
+  }
+
+  /**
+   * Stop the container: calls dispose() on all resolved instances that implement Disposable,
+   * in reverse resolution order, then clears the instance cache.
+   */
+  async stop(): Promise<void> {
+    const entries = [...this.instances.values()].reverse();
+    for (const instance of entries) {
+      if (this.isDisposable(instance)) {
+        await instance.dispose();
+      }
+    }
+    this.instances.clear();
+  }
+
+  private isWarmable(value: unknown): value is Warmable {
+    return (
+      value !== null &&
+      typeof value === 'object' &&
+      'warmup' in (value as object) &&
+      typeof (value as Warmable).warmup === 'function'
+    );
+  }
+
+  private isDisposable(value: unknown): value is Disposable {
+    return (
+      value !== null &&
+      typeof value === 'object' &&
+      'dispose' in (value as object) &&
+      typeof (value as Disposable).dispose === 'function'
+    );
   }
 
   private getFactory(token: symbol): Factory<unknown> | undefined {

@@ -18,7 +18,9 @@ export type WorkspaceEvent =
   | { type: 'message.sent'; from: string; to: string; intent: string }
   | { type: 'task.assigned'; taskId: string; agentId: string }
   | { type: 'task.completed'; taskId: string }
-  | { type: 'task.failed'; taskId: string };
+  | { type: 'task.failed'; taskId: string }
+  | { type: 'task.retried'; taskId: string; attempt: number; nextRetryAt: number }
+  | { type: 'message.expired'; messageId: string; topic: string };
 
 export type EventType = WorkspaceEvent['type'];
 

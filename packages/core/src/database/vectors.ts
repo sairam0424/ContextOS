@@ -5,8 +5,9 @@ const CACHE_MAX_SIZE = 100;
 const searchCache = new Map<string, { result: any; timestamp: number }>();
 const CACHE_TTL_MS = 30_000; // 30 seconds
 
-function getCacheKey(queryText: string, limit: number, offset: number, includePrivate: boolean): string {
-  return createHash('md5').update(`${queryText}:${limit}:${offset}:${includePrivate}`).digest('hex');
+function getCacheKey(queryText: string, limit: number, offset: number, includePrivate: boolean, providerName?: string): string {
+  const prefix = providerName ? `${providerName}:` : '';
+  return createHash('md5').update(`${prefix}${queryText}:${limit}:${offset}:${includePrivate}`).digest('hex');
 }
 
 function pruneCache(): void {
@@ -97,8 +98,8 @@ export class VectorsRepository {
     return stmt.all(Buffer.from(embedding.buffer), docId, embedding.length, k) as any[];
   }
 
-  searchHybrid(queryEmbedding: Float32Array, queryText: string, limit: number = 10, includePrivate: boolean = false, offset: number = 0) {
-    const cacheKey = getCacheKey(queryText, limit, offset, includePrivate);
+  searchHybrid(queryEmbedding: Float32Array, queryText: string, limit: number = 10, includePrivate: boolean = false, offset: number = 0, providerName?: string) {
+    const cacheKey = getCacheKey(queryText, limit, offset, includePrivate, providerName);
     const cached = searchCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
       return cached.result;
