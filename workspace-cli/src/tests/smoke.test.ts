@@ -1,5 +1,6 @@
 import assert from "node:assert";
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from 'node:url';
 
@@ -26,9 +27,11 @@ describe("CLI Experience Layer (Smoke Tests)", () => {
         });
     });
 
-    it("should report version 1.1.0", () => {
+    it("should report the current version", () => {
+        const pkgPath = path.resolve(__dirname, "../../package.json");
+        const { version } = JSON.parse(readFileSync(pkgPath, "utf-8"));
         const output = execSync(`node ${cliPath} --version`).toString();
-        assert.strictEqual(output.trim(), "1.1.0");
+        assert.strictEqual(output.trim(), version);
     });
 
     describe("Functional Commands", () => {

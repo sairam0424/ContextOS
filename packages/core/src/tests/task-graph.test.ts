@@ -110,6 +110,11 @@ describe('TaskGraph', function () {
 
     graph.fail(task.id, 'error 3');
     const after3 = graph.getTask(task.id)!;
-    assert.strictEqual(after3.status, 'failed');
+    assert.strictEqual(after3.status, 'pending');
+    assert.strictEqual(after3.retries, 3);
+
+    graph.fail(task.id, 'error 4');
+    const after4 = graph.getTask(task.id)!;
+    assert.strictEqual(after4.status, 'failed');
   });
 });
