@@ -1,5 +1,12 @@
 export type TaskStatus = 'pending' | 'assigned' | 'in_progress' | 'completed' | 'failed';
 
+export interface RetryConfig {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  backoffMultiplier: number;
+}
+
 export interface TaskNode {
   id: string;
   missionId: string;
@@ -11,6 +18,8 @@ export interface TaskNode {
   result?: unknown;
   timeout: number;
   retries: number;
+  priority: number;
+  requiredCapabilities: string[];
   createdAt: number;
 }
 
@@ -20,6 +29,9 @@ export interface CreateTaskOpts {
   description: string;
   dependencies?: string[];
   timeout?: number;
+  priority?: number;
+  requiredCapabilities?: string[];
+  retryConfig?: Partial<RetryConfig>;
 }
 
 export interface MissionProgress {

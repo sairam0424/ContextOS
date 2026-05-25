@@ -10,7 +10,9 @@ export function archiveCommand(program: Command) {
     .command("archive")
     .description("Move a completed project to the archive and extract learnings")
     .argument("<project>", "Project name to archive")
-    .action(async (project) => {
+    .option('--dry-run', 'Show what would be archived without making changes')
+    .action(async (project, opts) => {
+      const isDryRun = opts.dryRun ?? false;
       const spinner = ora(`Archiving project ${chalk.cyan(project)}...`).start();
       try {
         const workspaceRoot = process.cwd();
@@ -22,9 +24,18 @@ export function archiveCommand(program: Command) {
           return;
         }
 
+        if (isDryRun) {
+          spinner.stop();
+          console.log(chalk.yellow('DRY RUN — no changes will be made:'));
+          console.log(chalk.dim(`  Would apply #cold tags to all .md files in projects/${project}/`));
+          console.log(chalk.dim(`  Would move projects/${project}/ → archive/projects/${project}/`));
+          console.log(chalk.dim(`  Would create archive commit for ${project}`));
+          return;
+        }
+
         spinner.text = `Applying #cold tags recursively to ${project}...`;
         const projectFiles = await fs.readdir(projectDir, { recursive: true });
-        
+
         for (const file of projectFiles) {
           const filePath = path.join(projectDir, file as string);
           if ((await fs.stat(filePath)).isFile() && filePath.endsWith(".md")) {

@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import type { RawDB } from '../database/types.js';
-import type { TaskNode, CreateTaskOpts, TaskStatus, MissionProgress } from './types.js';
+import type { TaskNode, CreateTaskOpts, TaskStatus, MissionProgress, RetryConfig } from './types.js';
 import type { WorkspaceEventBus } from '../events/index.js';
 import { createChildLogger } from '../logger.js';
 import { validateName } from '../validation.js';
 
 const log = createChildLogger('task-graph');
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 30000,
+  backoffMultiplier: 2,
+};
 
 export class TaskGraph {
   constructor(private db: RawDB, private eventBus: WorkspaceEventBus) {}
@@ -17,17 +24,20 @@ export class TaskGraph {
     const id = randomUUID();
     const now = Date.now();
     const deps = opts.dependencies ?? [];
+    const priority = opts.priority ?? 0;
+    const requiredCapabilities = opts.requiredCapabilities ?? [];
+    const retryConfig = opts.retryConfig ? JSON.stringify({ ...DEFAULT_RETRY_CONFIG, ...opts.retryConfig }) : null;
 
     this.db.prepare(`
-      INSERT INTO task_nodes (id, mission_id, title, description, timeout, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, opts.missionId, validatedTitle, validatedDescription, opts.timeout ?? 300, now);
+      INSERT INTO task_nodes (id, mission_id, title, description, timeout, created_at, priority, required_capabilities, retry_config)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, opts.missionId, validatedTitle, validatedDescription, opts.timeout ?? 300, now, priority, JSON.stringify(requiredCapabilities), retryConfig);
 
     for (const depId of deps) {
       this.db.prepare(`INSERT INTO task_dependencies (task_id, depends_on) VALUES (?, ?)`).run(id, depId);
     }
 
-    log.debug({ taskId: id, missionId: opts.missionId, deps }, 'Task added to graph');
+    log.debug({ taskId: id, missionId: opts.missionId, deps, priority }, 'Task added to graph');
 
     return {
       id,
@@ -38,6 +48,8 @@ export class TaskGraph {
       dependencies: deps,
       timeout: opts.timeout ?? 300,
       retries: 0,
+      priority,
+      requiredCapabilities,
       createdAt: now,
     };
   }
@@ -112,9 +124,23 @@ export class TaskGraph {
     const task = this.getTask(taskId);
     if (!task) return;
 
-    if (task.retries < 2) {
+    // Determine retry config from stored config or defaults
+    const row = this.db.prepare(`SELECT retry_config FROM task_nodes WHERE id = ?`).get(taskId) as any;
+    const retryConfig: RetryConfig = row?.retry_config
+      ? JSON.parse(row.retry_config)
+      : DEFAULT_RETRY_CONFIG;
+
+    if (task.retries < retryConfig.maxRetries) {
+      const attempt = task.retries + 1;
+      const delay = Math.min(
+        retryConfig.baseDelayMs * Math.pow(retryConfig.backoffMultiplier, task.retries),
+        retryConfig.maxDelayMs
+      );
+      const nextRetryAt = Date.now() + delay;
+
       this.db.prepare(`UPDATE task_nodes SET status = 'pending', assigned_to = NULL, retries = retries + 1 WHERE id = ?`).run(taskId);
-      log.warn({ taskId, retries: task.retries + 1 }, 'Task failed, retrying');
+      this.eventBus.emit({ type: 'task.retried', taskId, attempt, nextRetryAt });
+      log.warn({ taskId, attempt, nextRetryAt, delay }, 'Task failed, retrying with backoff');
     } else {
       this.db.prepare(`UPDATE task_nodes SET status = 'failed', result = ? WHERE id = ?`).run(JSON.stringify({ error }), taskId);
       this.eventBus.emit({ type: 'task.failed', taskId });
@@ -189,6 +215,8 @@ export class TaskGraph {
       result: row.result ? JSON.parse(row.result) : undefined,
       timeout: row.timeout,
       retries: row.retries,
+      priority: row.priority ?? 0,
+      requiredCapabilities: row.required_capabilities ? JSON.parse(row.required_capabilities) : [],
       createdAt: row.created_at,
     };
   }

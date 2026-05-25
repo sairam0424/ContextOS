@@ -23,6 +23,7 @@ import { graphCommand } from "./commands/graph.js";
 import { watchCommand } from "./commands/watch.js";
 import { dashboardCommand } from "./commands/dashboard.js";
 import { missionCommand } from "./commands/mission.js";
+import { completionCommand } from "./commands/completion.js";
 
 const program = new Command();
 
@@ -31,7 +32,11 @@ const { version } = require('../package.json') as { version: string };
 program
   .name("workspace")
   .description("ContextOS Developer Interface Layer")
-  .version(version);
+  .version(version)
+  .option('--json', 'Output results as JSON')
+  .option('--verbose', 'Enable verbose output');
+
+program.showSuggestionAfterError(true);
 
 // Register Commands
 initCommand(program);
@@ -53,6 +58,7 @@ graphCommand(program);
 watchCommand(program);
 dashboardCommand(program);
 missionCommand(program);
+completionCommand(program);
 
 program.parse(process.argv);
 

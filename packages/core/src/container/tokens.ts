@@ -33,6 +33,7 @@ export const TOKENS = {
   ConflictResolver: Symbol.for('ctx:ConflictResolver') as Token<ConflictResolver>,
   CircuitBreaker: Symbol.for('ctx:CircuitBreaker') as Token<CircuitBreaker>,
   AuditLog: Symbol.for('ctx:AuditLog') as Token<AuditLog>,
+  Metrics: Symbol.for('ctx:Metrics') as Token<unknown>,
 } as const;
 
 export type ServiceToken = typeof TOKENS[keyof typeof TOKENS];

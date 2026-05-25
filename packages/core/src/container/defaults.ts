@@ -9,6 +9,7 @@ import { TaskScheduler } from '../orchestration/scheduler.js';
 import { ConflictResolver } from '../orchestration/conflict-resolver.js';
 import { CircuitBreaker } from '../resilience/circuit-breaker.js';
 import { AuditLog } from '../resilience/audit-log.js';
+import { MetricsCollector } from '../metrics/index.js';
 
 /**
  * Creates a default DI container using the shared (lazy) database singleton.
@@ -47,12 +48,28 @@ export function createDefaultContainer(): ServiceContainer {
   });
   container.register(TOKENS.CircuitBreaker, (c) => {
     const registry = c.resolve(TOKENS.AgentRegistry);
-    return new CircuitBreaker(registry);
+    const db = c.resolve(TOKENS.Database);
+    return new CircuitBreaker(registry, undefined, db.getRawDb());
   });
   container.register(TOKENS.AuditLog, (c) => {
     const db = c.resolve(TOKENS.Database);
     return new AuditLog(db.getRawDb());
   });
+  container.register(TOKENS.Metrics, () => new MetricsCollector());
+
+  wireEventAuditBridge(container);
 
   return container;
+}
+
+function wireEventAuditBridge(container: ServiceContainer): void {
+  const auditLog = container.resolve(TOKENS.AuditLog);
+  const eventBus = container.resolve(TOKENS.EventBus);
+  const AUDITED = ['task.failed', 'agent.quarantined', 'message.expired'] as const;
+  for (const eventType of AUDITED) {
+    eventBus.on(eventType as any, (event: any) => {
+      const { type, ...detail } = event;
+      auditLog.append('system', type, detail);
+    });
+  }
 }

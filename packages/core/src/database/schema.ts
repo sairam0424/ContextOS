@@ -195,6 +195,31 @@ export function initializeSchema(db: RawDB): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_mission ON task_nodes(mission_id, status)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON task_nodes(assigned_to, status)`);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS circuit_breaker_state (
+      id TEXT PRIMARY KEY,
+      state TEXT NOT NULL DEFAULT 'closed',
+      tripped_at INTEGER,
+      error_count INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dead_letters (
+      id TEXT PRIMARY KEY,
+      original_id TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      target_id TEXT,
+      topic TEXT,
+      content TEXT NOT NULL,
+      expired_at INTEGER NOT NULL,
+      reason TEXT NOT NULL DEFAULT 'ttl_expired'
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_dead_letters_sender ON dead_letters(sender_id)`);
+
   log.debug('Schema initialization complete');
 }
 
@@ -218,6 +243,9 @@ export function migrateSchema(db: RawDB): void {
 
   const taskCols = new Set((db.pragma('table_info(task_nodes)') as any[]).map((c: any) => c.name));
   if (!taskCols.has('assigned_at')) db.exec(`ALTER TABLE task_nodes ADD COLUMN assigned_at INTEGER`);
+  if (!taskCols.has('priority')) db.exec(`ALTER TABLE task_nodes ADD COLUMN priority INTEGER NOT NULL DEFAULT 0`);
+  if (!taskCols.has('required_capabilities')) db.exec(`ALTER TABLE task_nodes ADD COLUMN required_capabilities TEXT DEFAULT '[]'`);
+  if (!taskCols.has('retry_config')) db.exec(`ALTER TABLE task_nodes ADD COLUMN retry_config TEXT`);
 
   // Performance indexes for common query patterns
   db.exec(`CREATE INDEX IF NOT EXISTS idx_access_path_ts ON access_log(path, timestamp)`);
