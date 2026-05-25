@@ -144,25 +144,14 @@ export class CircuitBreaker {
   }
 
   private restoreState(agentId: string): void {
-    if (!this.db) return;
-    if (this.errors.has(agentId)) return;
-
+    if (!this.db || this.errors.has(agentId)) return;
     const row = this.db.prepare(`SELECT * FROM circuit_breaker_state WHERE id = ?`).get(agentId) as any;
-    if (!row) return;
-
-    if (row.state === 'closed' && row.error_count === 0) return;
-
-    const record: ErrorRecord = {
-      timestamps: [],
+    if (!row || row.state === 'closed') return;
+    // Only restore the trip state, not fabricated timestamps
+    // Use trippedAt as a single timestamp marker
+    this.errors.set(agentId, {
+      timestamps: row.tripped_at ? [row.tripped_at] : [],
       trippedAt: row.tripped_at ?? undefined,
-    };
-
-    // Reconstruct timestamps based on error_count (spread within window)
-    const now = Date.now();
-    for (let i = 0; i < row.error_count; i++) {
-      record.timestamps.push(now - (row.error_count - i) * 100);
-    }
-
-    this.errors.set(agentId, record);
+    });
   }
 }

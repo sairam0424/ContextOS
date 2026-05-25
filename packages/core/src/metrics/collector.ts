@@ -5,6 +5,8 @@ export interface MetricsSnapshot {
 }
 
 export class MetricsCollector {
+  private static readonly MAX_HISTOGRAM_SIZE = 1000;
+
   private counters = new Map<string, number>();
   private histograms = new Map<string, number[]>();
   private gauges = new Map<string, number>();
@@ -16,6 +18,10 @@ export class MetricsCollector {
   observe(name: string, value: number): void {
     const existing = this.histograms.get(name) ?? [];
     existing.push(value);
+    // Trim to prevent unbounded growth
+    if (existing.length > MetricsCollector.MAX_HISTOGRAM_SIZE) {
+      existing.splice(0, existing.length - MetricsCollector.MAX_HISTOGRAM_SIZE);
+    }
     this.histograms.set(name, existing);
   }
 

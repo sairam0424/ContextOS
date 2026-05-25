@@ -40,6 +40,9 @@ export class GeminiProvider implements EmbeddingProvider {
     }
 
     async generate(text: string): Promise<Float32Array> {
+        if (!this.apiKey) {
+            throw new Error('Gemini API key is required but not configured');
+        }
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10_000);
         try {
