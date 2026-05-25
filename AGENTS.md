@@ -6,7 +6,7 @@ ContextOS is a TypeScript monorepo (Turborepo) providing an intelligence layer f
 
 Four workspaces under one root:
 
-- **`packages/core`** (`@context-os/core`) — Shared intelligence: SQLite indexer, vector search (sqlite-vec), ML embeddings (@xenova/transformers), tree-sitter code parsing, schema validation (Ajv).
+- **`packages/core`** (`@context-os/core`) — Shared intelligence: SQLite indexer, vector search (sqlite-vec), ML embeddings (@xenova/transformers), tree-sitter code parsing, schema validation (Ajv), resilience patterns.
 - **`workspace-cli`** (`@context-os/cli`) — Terminal interface (`context-os` binary). Commands live in `src/commands/`. Uses Commander, Chalk, Ora.
 - **`workspace-mcp`** (`@context-os/mcp`) — Model Context Protocol server (`context-os-mcp` binary). Dual transport: stdio (default) and HTTP/SSE (`server-http.ts`). MCP tools in `src/tools/`.
 - **`workspace-dashboard`** (private) — React 19 + Vite + Tailwind v4 + Three.js spatial visualization (Aether HUD). Not published.
@@ -52,34 +52,60 @@ Run a single test file:
 cd packages/core && npx mocha dist/tests/some-file.test.js
 ```
 
+Coverage (core only):
+
+```bash
+cd packages/core && npm run test:coverage  # c8 with text + lcov reporters
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GEMINI_API_KEY` | No | AI-powered embeddings and repairs. Without it, local transformers are used. |
+| `CONTEXTOS_LOG_LEVEL` | No | `debug` / `info` / `warn` / `error`. Defaults to `info`. |
+| `MCP_AUTH_TOKEN` | For HTTP | Bearer token for MCP HTTP transport authentication. |
+| `MCP_HTTP_PORT` | No | MCP HTTP server port. Defaults to `3001`. |
+| `MCP_CORS_ORIGINS` | No | Comma-separated CORS origins for MCP HTTP. |
+
 ## Coding Style & Naming Conventions
 
 - **ESM only** — all packages use `"type": "module"` with `NodeNext` module resolution.
 - **TypeScript strict mode** — `"strict": true` across all tsconfigs. Target: `ESNext`.
 - **ESLint** — configured for the dashboard only (`eslint.config.js`): `typescript-eslint`, `react-hooks`, `react-refresh`.
 - **No shared formatter config** — no Prettier dotfile in the repo.
+- **Immutability preferred** — create new objects, avoid in-place mutation.
+- **Spawn over exec** — use `spawn` for subprocess calls to prevent shell injection.
 
 ## Testing Guidelines
 
 - **Framework**: Mocha + Chai (core, cli, mcp).
 - Tests must compile first — they live in `src/tests/` as `.ts` and run from `dist/tests/` after build.
-- Core tests use per-test temp databases (look for `.context-db-test-*` dirs — gitignored).
+- Core tests use per-test temp databases (`.context-db-test-*` dirs — gitignored).
+- Integration tests may need extended timeouts (5000ms) for full-workspace scans.
 - The dashboard has no test suite.
 
 ## Version & Release Protocol
 
-**Strict version parity**: all four `package.json` files (root, core, cli, mcp) must share the same version. CLI and MCP also pin `@context-os/core` to the exact version.
+**Strict version parity**: all four `package.json` files (root, core, cli, mcp) must share the same version. CLI and MCP pin `@context-os/core` to the exact version.
 
 Publish order (CI and manual): **Core -> CLI -> MCP** (sequential). Triggered by pushing a `v*` tag. CI runs on Node 22.
 
+Prerequisites: Node 22+, npm 11+, C++ toolchain (for native SQLite compilation).
+
 ## Git Hooks & CI
 
-- **Husky pre-commit + pre-push**: both run `npm run validate` (full build + workspace checks). Run `npm run prepare` after fresh clone to install hooks.
-- **GitHub Actions**: PR validation (`validate.yml` on PRs to main) and tag-based npm publish (`publish.yml` on `v*` tags). CI uses Node 22.
+- **Husky pre-commit + pre-push**: both run `npm run validate`. Run `npm run prepare` after fresh clone to install hooks.
+- **GitHub Actions**: PR validation (`validate.yml` on PRs to main) and tag-based npm publish (`publish.yml` on `v*` tags).
 
 ## Agent Double-Hook Protocol
 
 Before starting work, read `AGENTS_LEARNING.md` to avoid repeating past mistakes. After completing work, append new learnings (patterns discovered, anti-patterns hit, architectural decisions made) to the same file.
+
+Key lessons from past sessions:
+- Always run `npm run build -w @context-os/core` after modifying core source — dependent packages consume `dist/`, not raw `.ts`.
+- Use absolute paths within the workspace root to prevent ambiguity across tool calls.
+- Never dump files into the root — every file belongs in its designated layer (Root, Org, Project, Skills, Knowledge).
 
 ## Commit Conventions
 
@@ -89,6 +115,7 @@ Conventional commits with scoped prefixes:
 feat(core): description       # New functionality
 fix(core): description        # Bug fixes
 test(core): description       # Adding/updating tests
+perf(core): description       # Performance improvements
 refactor(core): description   # Restructuring without behavior change
 docs: description             # Documentation only
 chore: description            # Tooling, deps, config
