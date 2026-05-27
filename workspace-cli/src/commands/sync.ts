@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import { workspaceService } from "@context-os/core";
+import { EXIT_CODES, exitWithCode } from '../exit-codes.js';
 
 export function syncCommand(program: Command) {
   program
@@ -21,6 +22,12 @@ export function syncCommand(program: Command) {
         }
       } catch (error: any) {
         spinner.fail(chalk.red(`Sync failed: ${error.message}`));
+        const isNotInitialized = error.message?.toLowerCase().includes('not initialized') ||
+          error.code === 'WORKSPACE_NOT_INITIALIZED';
+        if (isNotInitialized) {
+          exitWithCode(EXIT_CODES.WORKSPACE_NOT_INITIALIZED, 'Workspace is not initialized. Run "workspace init" first.');
+        }
+        exitWithCode(EXIT_CODES.GENERAL_ERROR, error.message);
       }
     });
 }

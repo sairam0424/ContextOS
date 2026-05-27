@@ -2,6 +2,7 @@
 import { createRequire } from 'module';
 import { Command } from "commander";
 import chalk from "chalk";
+import { EXIT_CODES, exitWithCode } from './exit-codes.js';
 
 const require = createRequire(import.meta.url);
 import { initCommand } from "./commands/init.js";
@@ -59,6 +60,17 @@ watchCommand(program);
 dashboardCommand(program);
 missionCommand(program);
 completionCommand(program);
+
+process.on('uncaughtException', (error) => {
+  console.error(chalk.red(`Fatal error: ${error.message}`));
+  exitWithCode(EXIT_CODES.GENERAL_ERROR);
+});
+
+process.on('unhandledRejection', (reason) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  console.error(chalk.red(`Unhandled rejection: ${message}`));
+  exitWithCode(EXIT_CODES.GENERAL_ERROR);
+});
 
 program.parse(process.argv);
 
