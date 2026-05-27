@@ -20,10 +20,18 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "@semantic-release/changelog": "^6.0.0",
+    "@semantic-release/exec": "^7.0.0",
+    "@semantic-release/git": "^10.0.0",
+    "@semantic-release/github": "^11.0.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.13.10",
     "@types/ws": "^8.18.1",
     "husky": "^9.1.7",
+    "lint-staged": "^15.0.0",
+    "semantic-release": "^24.0.0",
     "turbo": "^2.9.5"
   },
   "dependencies": {

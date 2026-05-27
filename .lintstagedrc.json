@@ -1,0 +1,3 @@
+{
+  "*.{ts,tsx}": ["bash -c 'cd packages/core && npx tsc --noEmit --skipLibCheck -p tsconfig.json'"]
+}
