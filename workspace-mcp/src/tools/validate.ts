@@ -4,6 +4,7 @@ import { validationService, ALLOWED_BUCKETS, workspaceRoot } from "@context-os/c
 import path from "node:path";
 import fs from "fs-extra";
 import { handleToolError } from "../utils.js";
+import { createProgressReporter } from "../progress.js";
 
 export function registerValidateTool(server: McpServer) {
   server.tool(
@@ -11,33 +12,41 @@ export function registerValidateTool(server: McpServer) {
     {
       path: z.string().optional().describe("Relative file path to validate. Omit to validate the entire workspace.")
     },
-    async ({ path: filePath }) => {
+    async ({ path: filePath }, extra) => {
       try {
+        const reporter = createProgressReporter(server, extra._meta?.progressToken);
+
         if (filePath) {
+          reporter.report(1, 2);
           const fullPath = path.resolve(workspaceRoot, filePath);
           const { valid, issues } = await validationService.validateFile(fullPath);
           const status = valid ? "✅ Valid" : `❌ Invalid (${issues.length} issue${issues.length !== 1 ? 's' : ''})`;
           const body = issues.length > 0 ? `\n${issues.map(i => `  - ${i}`).join('\n')}` : '';
+          reporter.report(2, 2);
           return { content: [{ type: "text" as const, text: `${status}: ${filePath}${body}` }] };
         }
 
-        // Full workspace scan
+        // Full workspace scan — collect all files first for accurate progress
+        const allFiles: string[] = [];
+        for (const bucket of ALLOWED_BUCKETS) {
+          const bucketPath = path.join(workspaceRoot, bucket);
+          if (!(await fs.pathExists(bucketPath))) continue;
+          const files = await findMarkdownFiles(bucketPath);
+          allFiles.push(...files);
+        }
+
+        const totalFiles = allFiles.length;
         let totalChecked = 0;
         let totalIssues = 0;
         const invalidFiles: string[] = [];
 
-        for (const bucket of ALLOWED_BUCKETS) {
-          const bucketPath = path.join(workspaceRoot, bucket);
-          if (!(await fs.pathExists(bucketPath))) continue;
-
-          const files = await findMarkdownFiles(bucketPath);
-          for (const f of files) {
-            totalChecked++;
-            const { valid, issues } = await validationService.validateFile(f);
-            if (!valid) {
-              totalIssues += issues.length;
-              invalidFiles.push(`${path.relative(workspaceRoot, f)}: ${issues.join('; ')}`);
-            }
+        for (const f of allFiles) {
+          totalChecked++;
+          reporter.report(totalChecked, totalFiles);
+          const { valid, issues } = await validationService.validateFile(f);
+          if (!valid) {
+            totalIssues += issues.length;
+            invalidFiles.push(`${path.relative(workspaceRoot, f)}: ${issues.join('; ')}`);
           }
         }
 
