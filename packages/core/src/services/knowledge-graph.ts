@@ -173,4 +173,5 @@ export class KnowledgeGraphService {
     }
 }
 
+/** @deprecated Use container.resolve(TOKENS.KnowledgeGraph) from createContextOS() instead. */
 export const knowledgeGraphService = new KnowledgeGraphService();

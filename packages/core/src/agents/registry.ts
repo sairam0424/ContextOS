@@ -8,7 +8,31 @@ import { validateName, validateCapabilities } from '../validation.js';
 const log = createChildLogger('agent-registry');
 
 export class AgentRegistry {
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(private db: RawDB, private eventBus: WorkspaceEventBus) {}
+
+  startStaleCleanup(intervalMs: number = 30000): void {
+    this.stopStaleCleanup();
+    this.cleanupTimer = setInterval(() => {
+      const staleAgents = this.getStale(90000);
+      for (const agent of staleAgents) {
+        this.quarantine(agent.id, 'heartbeat_timeout');
+        log.info({ agentId: agent.id, name: agent.name }, 'Auto-quarantined stale agent');
+      }
+    }, intervalMs);
+  }
+
+  stopStaleCleanup(): void {
+    if (this.cleanupTimer !== null) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+  }
+
+  dispose(): void {
+    this.stopStaleCleanup();
+  }
 
   register(opts: RegisterOpts): AgentRecord {
     const validatedName = validateName(opts.name);

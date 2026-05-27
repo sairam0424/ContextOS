@@ -32,6 +32,19 @@ export function registerLockTools(server: McpServer) {
     },
     async ({ filePath, agentId }) => {
       try {
+        const lockStatus = lockingService.isLocked(filePath);
+        if (!lockStatus.locked) {
+          return {
+            content: [{ type: "text" as const, text: `Cannot release lock: ${filePath} is not locked` }],
+            isError: true
+          };
+        }
+        if (lockStatus.agentId !== agentId) {
+          return {
+            content: [{ type: "text" as const, text: `Cannot release lock: ${filePath} is held by agent '${lockStatus.agentId}', not '${agentId}'` }],
+            isError: true
+          };
+        }
         await lockingService.release(filePath, agentId);
         return { content: [{ type: "text" as const, text: `Lock released: ${filePath}` }] };
       } catch (error: any) {

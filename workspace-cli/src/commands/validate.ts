@@ -3,6 +3,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { validationService } from "@context-os/core";
 import { getOutputOpts, output, verbose } from '../utils/output.js';
+import { EXIT_CODES, exitWithCode } from '../exit-codes.js';
 
 export function validateCommand(program: Command) {
   program
@@ -18,7 +19,7 @@ export function validateCommand(program: Command) {
         if (opts.json) {
           output(result, opts);
           spinner.stop();
-          if (!result.valid) process.exit(1);
+          if (!result.valid) exitWithCode(EXIT_CODES.VALIDATION_FAILED);
           return;
         }
 
@@ -33,11 +34,11 @@ export function validateCommand(program: Command) {
                // Optional: console.log(chalk.yellow(`   - detail: ${JSON.stringify(issue.details)}`));
             }
           });
-          process.exit(1);
+          exitWithCode(EXIT_CODES.VALIDATION_FAILED);
         }
       } catch (error: any) {
         spinner.fail(chalk.red(`Validation error: ${error.message}`));
-        process.exit(1);
+        exitWithCode(EXIT_CODES.GENERAL_ERROR, error.message);
       }
     });
 }

@@ -104,12 +104,16 @@ export function initializeSchema(db: RawDB): void {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS locks (
-      path TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
       agent_id TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'write',
       expires_at INTEGER NOT NULL,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (path, agent_id, mode)
     )
   `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_locks_path ON locks(path)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_locks_expires ON locks(expires_at)`);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS access_log (
@@ -258,9 +262,51 @@ export function migrateSchema(db: RawDB): void {
   if (!taskCols.has('required_capabilities')) db.exec(`ALTER TABLE task_nodes ADD COLUMN required_capabilities TEXT DEFAULT '[]'`);
   if (!taskCols.has('retry_config')) db.exec(`ALTER TABLE task_nodes ADD COLUMN retry_config TEXT`);
 
+  // Migrate locks table from single-column PK (path) to composite PK (path, agent_id, mode)
   const lockCols = db.pragma('table_info(locks)') as any[];
-  if (!lockCols.find((c: any) => c.name === 'mode')) {
-    db.exec(`ALTER TABLE locks ADD COLUMN mode TEXT NOT NULL DEFAULT 'write'`);
+  const pathCol = lockCols.find((c: any) => c.name === 'path');
+  const hasSinglePK = pathCol && pathCol.pk === 1 && lockCols.filter((c: any) => c.pk > 0).length === 1;
+
+  if (hasSinglePK) {
+    log.debug('Migrating locks table from single-column PK to composite PK');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS locks_new (
+        path TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        mode TEXT NOT NULL DEFAULT 'write',
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (path, agent_id, mode)
+      )
+    `);
+
+    // Migrate existing rows: split encoded read lock keys (path#read:agentId)
+    const existingRows = db.prepare(`SELECT * FROM locks`).all() as any[];
+    const insertStmt = db.prepare(`
+      INSERT OR IGNORE INTO locks_new (path, agent_id, mode, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    for (const row of existingRows) {
+      const rawPath: string = row.path;
+      const readMarker = rawPath.indexOf('#read:');
+      if (readMarker !== -1) {
+        // Encoded read lock: extract real path and agentId
+        const realPath = rawPath.substring(0, readMarker);
+        const encodedAgent = rawPath.substring(readMarker + '#read:'.length);
+        insertStmt.run(realPath, encodedAgent, 'read', row.expires_at, row.created_at);
+      } else {
+        // Normal write lock or legacy lock
+        const mode = row.mode || 'write';
+        insertStmt.run(rawPath, row.agent_id, mode, row.expires_at, row.created_at);
+      }
+    }
+
+    db.exec(`DROP TABLE locks`);
+    db.exec(`ALTER TABLE locks_new RENAME TO locks`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_locks_path ON locks(path)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_locks_expires ON locks(expires_at)`);
+    log.debug('Locks table migration complete');
   }
 
   // Performance indexes for common query patterns

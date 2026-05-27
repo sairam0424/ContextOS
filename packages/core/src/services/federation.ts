@@ -77,4 +77,5 @@ export class FederationService {
   }
 }
 
+/** @deprecated Use container.resolve(TOKENS.Federation) from createContextOS() instead. */
 export const federationService = new FederationService();

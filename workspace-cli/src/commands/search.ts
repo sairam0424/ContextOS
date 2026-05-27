@@ -3,6 +3,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { intelligenceService } from "@context-os/core";
 import { getOutputOpts, output, verbose } from '../utils/output.js';
+import { EXIT_CODES, exitWithCode } from '../exit-codes.js';
 
 export function searchCommand(program: Command) {
   program
@@ -46,6 +47,7 @@ export function searchCommand(program: Command) {
         });
       } catch (error: any) {
         spinner.fail(chalk.red(`Search failed: ${error.message}`));
+        exitWithCode(EXIT_CODES.NOT_FOUND, error.message);
       }
     });
 }

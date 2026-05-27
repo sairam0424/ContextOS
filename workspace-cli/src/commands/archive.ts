@@ -3,7 +3,20 @@ import chalk from "chalk";
 import ora from "ora";
 import fs from "fs-extra";
 import path from "path";
+import { createInterface } from "node:readline";
 import { gitCommit } from "../utils.js";
+import { EXIT_CODES } from '../exit-codes.js';
+
+async function confirm(message: string): Promise<boolean> {
+  if (!process.stdin.isTTY) return true;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(`${message} [y/N] `, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'y');
+    });
+  });
+}
 
 export function archiveCommand(program: Command) {
   program
@@ -32,6 +45,14 @@ export function archiveCommand(program: Command) {
           console.log(chalk.dim(`  Would create archive commit for ${project}`));
           return;
         }
+
+        spinner.stop();
+        const confirmed = await confirm(`Are you sure you want to archive project '${project}'?`);
+        if (!confirmed) {
+          console.log(chalk.yellow('Archive cancelled.'));
+          process.exit(EXIT_CODES.SUCCESS);
+        }
+        spinner.start();
 
         spinner.text = `Applying #cold tags recursively to ${project}...`;
         const projectFiles = await fs.readdir(projectDir, { recursive: true });

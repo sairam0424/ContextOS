@@ -12,23 +12,63 @@
     },
     {
       "name": "workspace_search",
-      "description": "Search across workspace root, orgs, or project directories."
+      "description": "Search across workspace using hybrid vector + deep grep with optional Spatial RAG graph boosting."
     },
     {
       "name": "workspace_context",
-      "description": "Load all relevant project context (management files) in one batch."
+      "description": "Load all relevant project context (CONTEXT.md, memory, decisions, active tasks) in one batch."
     },
     {
       "name": "workspace_log_decision",
-      "description": "Structurally log architectural decisions in ADR format."
+      "description": "Structurally log architectural decisions in ADR format with auto-commit."
     },
     {
       "name": "workspace_memory_update",
-      "description": "Maintain and update project-specific context memory."
+      "description": "Maintain and update project-specific context memory in Markdown format."
     },
     {
       "name": "workspace_daily_update",
-      "description": "Record daily progress and updates to the central log."
+      "description": "Record daily progress entries to the project's chronological log."
+    },
+    {
+      "name": "workspace_sample",
+      "description": "Retrieve a workspace pulse snapshot including health score, top trends, and recent changes."
+    },
+    {
+      "name": "workspace_validate",
+      "description": "Validate workspace files or the entire workspace against schema rules."
+    },
+    {
+      "name": "workspace_lock_acquire",
+      "description": "Acquire an exclusive file lock for a specific agent to prevent concurrent edits."
+    },
+    {
+      "name": "workspace_lock_release",
+      "description": "Release a previously acquired file lock for a specific agent."
+    },
+    {
+      "name": "workspace_lock_status",
+      "description": "Check the current lock status of a file (locked/unlocked and holder)."
+    },
+    {
+      "name": "workspace_prune",
+      "description": "Remove stale index entries and temporary files with optional dry-run mode."
+    },
+    {
+      "name": "workspace_pulse",
+      "description": "Get workspace health metrics including intelligence queue status and recent changes."
+    },
+    {
+      "name": "workspace_mission",
+      "description": "Create, list, complete, archive, or activate workspace missions with priority tracking."
+    },
+    {
+      "name": "graph_query",
+      "description": "Traverse the knowledge graph from a start node with configurable depth, direction, and weight filters."
+    },
+    {
+      "name": "workspace_notify",
+      "description": "Send, read, or broadcast notifications between agents on topic channels."
     }
   ]
 }

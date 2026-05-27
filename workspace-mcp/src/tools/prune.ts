@@ -4,6 +4,7 @@ import { workspaceRoot, getSharedDatabase } from "@context-os/core";
 import path from "node:path";
 import fs from "fs-extra";
 import { handleToolError } from "../utils.js";
+import { createProgressReporter } from "../progress.js";
 
 export function registerPruneTool(server: McpServer) {
   server.tool(
@@ -12,27 +13,48 @@ export function registerPruneTool(server: McpServer) {
       target: z.enum(["tmp", "stale", "all"]).default("all").describe("What to prune: tmp files, stale index entries, or all"),
       dryRun: z.boolean().default(true).describe("If true (default), report what would be removed without deleting")
     },
-    async ({ target, dryRun }) => {
+    async ({ target, dryRun }, extra) => {
       try {
+        const reporter = createProgressReporter(server, extra._meta?.progressToken);
         const removed: string[] = [];
         const skipped: string[] = [];
 
+        // Collect total items for progress reporting
+        let totalItems = 0;
+        let processedItems = 0;
+
+        const tmpEntries: string[] = [];
         if (target === "tmp" || target === "all") {
           const tmpDir = path.join(workspaceRoot, "tmp");
           if (await fs.pathExists(tmpDir)) {
             const entries = await fs.readdir(tmpDir);
-            for (const entry of entries) {
-              const full = path.join(tmpDir, entry);
-              if (!dryRun) await fs.remove(full);
-              removed.push(`tmp/${entry}`);
-            }
+            tmpEntries.push(...entries);
+            totalItems += entries.length;
           }
         }
 
+        let docs: { path: string }[] = [];
         if (target === "stale" || target === "all") {
           const db = getSharedDatabase();
-          const docs = db.getAllDocuments();
+          docs = db.getAllDocuments();
+          totalItems += docs.length;
+        }
+
+        // Process tmp entries
+        for (const entry of tmpEntries) {
+          processedItems++;
+          reporter.report(processedItems, totalItems);
+          const full = path.join(workspaceRoot, "tmp", entry);
+          if (!dryRun) await fs.remove(full);
+          removed.push(`tmp/${entry}`);
+        }
+
+        // Process stale index entries
+        if (target === "stale" || target === "all") {
+          const db = getSharedDatabase();
           for (const doc of docs) {
+            processedItems++;
+            reporter.report(processedItems, totalItems);
             const fullPath = path.join(workspaceRoot, doc.path);
             const exists = await fs.pathExists(fullPath);
             if (!exists) {

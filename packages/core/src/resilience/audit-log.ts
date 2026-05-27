@@ -69,6 +69,15 @@ export class AuditLog {
     return rows.map(r => this.toEntry(r));
   }
 
+  prune(retainDays: number = 90): number {
+    const cutoff = Date.now() - (retainDays * 24 * 60 * 60 * 1000);
+    const result = this.db.prepare(
+      'DELETE FROM audit_log WHERE timestamp < ?'
+    ).run(cutoff);
+    log.info({ pruned: result.changes, retainDays }, 'audit log pruned');
+    return result.changes;
+  }
+
   verifyIntegrity(options?: { batchSize?: number; fromSequence?: number }): { valid: boolean; brokenAt?: string; lastVerifiedSequence: number } {
     const batchSize = options?.batchSize ?? 1000;
     let offset = options?.fromSequence ?? 0;
@@ -78,7 +87,22 @@ export class AuditLog {
       const prev = this.db.prepare('SELECT hash FROM audit_log WHERE sequence = ?').get(offset) as any;
       if (prev) prevHash = prev.hash;
     } else {
-      prevHash = '0'.repeat(64);
+      // After pruning, the chain root may no longer be sequence 0.
+      // Find the oldest remaining entry and treat it as the new root.
+      const oldest = this.db.prepare('SELECT sequence, prev_hash, hash FROM audit_log ORDER BY sequence ASC LIMIT 1').get() as any;
+      if (!oldest) {
+        // No entries at all — trivially valid
+        return { valid: true, lastVerifiedSequence: 0 };
+      }
+
+      if (oldest.sequence === 1 && oldest.prev_hash === '0'.repeat(64)) {
+        // Unpruned chain — original root intact
+        prevHash = '0'.repeat(64);
+      } else {
+        // Pruned chain — oldest entry's prevHash references a deleted entry.
+        // Accept it as the new trusted root; start verification from this entry.
+        prevHash = oldest.prev_hash;
+      }
     }
 
     while (true) {

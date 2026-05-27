@@ -7,7 +7,7 @@ import Python from 'tree-sitter-python';
 import { workspaceRoot, ALLOWED_BUCKETS } from './context.js';
 import { validationService } from './services/validation.js';
 import { DatabaseService, DBRecord, getSharedDatabase } from './database/index.js';
-import { EmbeddingService } from './services/embedding.js';
+import { EmbeddingService, getSharedEmbeddingService } from './services/embedding.js';
 import { createChildLogger } from './logger.js';
 
 const log = createChildLogger('indexer');
@@ -28,10 +28,9 @@ export class ContextIndexer {
     private dbService: DatabaseService;
     private embeddingService: EmbeddingService;
 
-    constructor(db?: DatabaseService) {
+    constructor(db?: DatabaseService, embeddingService?: EmbeddingService) {
         this.dbService = db || getSharedDatabase();
-        const geminiKey = process.env.GEMINI_API_KEY;
-        this.embeddingService = new EmbeddingService(geminiKey);
+        this.embeddingService = embeddingService || getSharedEmbeddingService();
     }
 
     public getDatabase(): DatabaseService {

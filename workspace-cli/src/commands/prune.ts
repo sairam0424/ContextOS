@@ -3,6 +3,19 @@ import chalk from "chalk";
 import ora from "ora";
 import fs from "fs-extra";
 import path from "path";
+import { createInterface } from "node:readline";
+import { EXIT_CODES } from '../exit-codes.js';
+
+async function confirm(message: string): Promise<boolean> {
+  if (!process.stdin.isTTY) return true;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(`${message} [y/N] `, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'y');
+    });
+  });
+}
 
 export function pruneCommand(program: Command) {
   program
@@ -14,22 +27,15 @@ export function pruneCommand(program: Command) {
       const spinner = ora("Cleaning up workspace...").start();
       try {
         const workspaceRoot = process.cwd();
-        const dailyDir = path.join(workspaceRoot, "daily");
         const tmpDir = path.join(workspaceRoot, "tmp");
 
-        let prunedCount = 0;
         const itemsToPrune: string[] = [];
 
-        // 1. Clean up tmp/
+        // 1. Identify items to prune in tmp/
         if (await fs.pathExists(tmpDir)) {
           const files = await fs.readdir(tmpDir);
           for (const file of files) {
-            if (isDryRun) {
-              itemsToPrune.push(path.join(tmpDir, file));
-            } else {
-              await fs.remove(path.join(tmpDir, file));
-            }
-            prunedCount++;
+            itemsToPrune.push(path.join(tmpDir, file));
           }
         }
 
@@ -46,11 +52,23 @@ export function pruneCommand(program: Command) {
               console.log(chalk.dim(`  Would remove: ${item}`));
             }
           }
-          console.log(chalk.yellow(`\nTotal: ${prunedCount} item(s) would be pruned.`));
+          console.log(chalk.yellow(`\nTotal: ${itemsToPrune.length} item(s) would be pruned.`));
           return;
         }
 
-        spinner.succeed(chalk.green(`Workspace pruned: ${prunedCount} temporary items removed.`));
+        spinner.stop();
+        const confirmed = await confirm(`Are you sure you want to prune ${itemsToPrune.length} item(s) from the workspace?`);
+        if (!confirmed) {
+          console.log(chalk.yellow('Prune cancelled.'));
+          process.exit(EXIT_CODES.SUCCESS);
+        }
+        spinner.start();
+
+        for (const item of itemsToPrune) {
+          await fs.remove(item);
+        }
+
+        spinner.succeed(chalk.green(`Workspace pruned: ${itemsToPrune.length} temporary items removed.`));
         console.log(chalk.yellow(`\n[Intelligence] Pruning complete. Next step: 'workspace archive' for finished projects.`));
       } catch (error: any) {
         spinner.fail(chalk.red(`Prune failed: ${error.message}`));

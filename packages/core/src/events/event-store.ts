@@ -2,6 +2,10 @@ import type { RawDB } from '../database/types.js';
 import type { WorkspaceEvent } from './types.js';
 
 export class EventStore {
+  private appendCount = 0;
+  private static readonly AUTO_PRUNE_INTERVAL = 1000;
+  private static readonly AUTO_PRUNE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
   constructor(private db: RawDB) {}
 
   append(event: WorkspaceEvent): number {
@@ -9,6 +13,12 @@ export class EventStore {
     const result = this.db.prepare(
       'INSERT INTO event_log (type, payload, timestamp) VALUES (?, ?, ?)'
     ).run(type, JSON.stringify(rest), Date.now());
+
+    this.appendCount++;
+    if (this.appendCount % EventStore.AUTO_PRUNE_INTERVAL === 0) {
+      this.prune(EventStore.AUTO_PRUNE_AGE_MS);
+    }
+
     return Number(result.lastInsertRowid);
   }
 

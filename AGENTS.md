@@ -85,6 +85,76 @@ cd packages/core && npm run test:coverage  # c8 with text + lcov reporters
 - Integration tests may need extended timeouts (5000ms) for full-workspace scans.
 - The dashboard has no test suite.
 
+## Agent Teams & Sub-Agent Delegation
+
+This section defines how AI agent teams (Claude Code sub-agents, Cursor background agents, or any multi-agent system) should divide and execute work on this codebase.
+
+### Agent Routing by Scope
+
+| Agent Role | Scope | Files Touched | Model Tier |
+|------------|-------|---------------|------------|
+| **Architect** | System design, DI container changes, new subsystem planning | `packages/core/src/container/`, `docs/architecture.md` | Opus |
+| **Core Engineer** | Business logic in core: orchestration, resilience, agents, events | `packages/core/src/**` | Sonnet/Opus |
+| **CLI Developer** | Commands, flags, shell completion, output formatting | `workspace-cli/src/**` | Sonnet |
+| **MCP Developer** | Tools, transports, protocol compliance, session management | `workspace-mcp/src/**` | Sonnet |
+| **Dashboard Dev** | React components, Three.js scenes, Tailwind styling | `workspace-dashboard/src/**` | Sonnet |
+| **Test Engineer** | Test coverage, regression tests, test infra | `*/src/tests/**` | Sonnet |
+| **Security Reviewer** | Auth, input validation, injection vectors, secret handling | Any file touching auth/PII/uploads | Opus |
+| **Release Manager** | Version bumps, CHANGELOG, publish pipeline | `package.json` (all), `CHANGELOG.md`, `release.sh` | Haiku/Sonnet |
+
+### Parallel Execution Rules
+
+Launch agents simultaneously when their scopes are independent:
+
+```
+PARALLEL OK:
+  - CLI agent + MCP agent (different workspaces, no shared source)
+  - Test engineer + Dashboard dev (no file overlap)
+  - Core engineer (events/) + Core engineer (orchestration/) — different subdirs
+
+SEQUENTIAL REQUIRED:
+  - Core changes → then CLI/MCP updates (they import from core dist/)
+  - Schema changes → then validation updates → then tests
+  - Any architect decision → then implementation agents
+```
+
+### Sub-Agent Boot Protocol
+
+Every sub-agent MUST follow this sequence before writing code:
+
+1. **Read `AGENTS_LEARNING.md`** — avoid repeating past mistakes
+2. **Read this file (`AGENTS.md`)** — understand scope and conventions
+3. **Build core first** if touching core: `npm run build -w packages/core`
+4. **Run existing tests** in your scope before modifying code
+5. **After completing work**: update `AGENTS_LEARNING.md` with new learnings
+
+### Task Handoff Format
+
+When delegating to a sub-agent, provide:
+
+```markdown
+## Task: [brief title]
+- **Scope**: [workspace/directory]
+- **Files**: [specific paths to read/modify]
+- **Depends on**: [other agent outputs, if any]
+- **Acceptance**: [how to verify — test command or behavior check]
+```
+
+### Conflict Avoidance
+
+- Each agent works in its designated workspace/subdirectory only
+- If a task requires cross-workspace changes, the **orchestrating agent** sequences them
+- Never modify `packages/core/src/index.ts` exports without coordinating — all workspaces depend on it
+- Lock files (`package-lock.json`) should only be modified by one agent per session
+
+### Review Chain
+
+After implementation, route through these agents in order:
+
+1. **Code Reviewer** — correctness, style, immutability, no mutations
+2. **Security Reviewer** — if touching auth/PII/uploads/env-vars (auto-triggered)
+3. **Test Analyzer** — coverage check, regression scan
+
 ## Version & Release Protocol
 
 **Strict version parity**: all four `package.json` files (root, core, cli, mcp) must share the same version. CLI and MCP pin `@context-os/core` to the exact version.
@@ -97,15 +167,6 @@ Prerequisites: Node 22+, npm 11+, C++ toolchain (for native SQLite compilation).
 
 - **Husky pre-commit + pre-push**: both run `npm run validate`. Run `npm run prepare` after fresh clone to install hooks.
 - **GitHub Actions**: PR validation (`validate.yml` on PRs to main) and tag-based npm publish (`publish.yml` on `v*` tags).
-
-## Agent Double-Hook Protocol
-
-Before starting work, read `AGENTS_LEARNING.md` to avoid repeating past mistakes. After completing work, append new learnings (patterns discovered, anti-patterns hit, architectural decisions made) to the same file.
-
-Key lessons from past sessions:
-- Always run `npm run build -w @context-os/core` after modifying core source — dependent packages consume `dist/`, not raw `.ts`.
-- Use absolute paths within the workspace root to prevent ambiguity across tool calls.
-- Never dump files into the root — every file belongs in its designated layer (Root, Org, Project, Skills, Knowledge).
 
 ## Commit Conventions
 
