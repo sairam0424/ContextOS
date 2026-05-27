@@ -1,4 +1,7 @@
 #!/bin/bash
+# DEPRECATED: Use `npx semantic-release` or push to main branch for automated releases.
+# This script is kept for reference only. See .releaserc.json for the automated pipeline.
+#
 # ContextOS: Professional Release Pipeline (Turbo-Optimized)
 
 set -e
