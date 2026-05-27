@@ -144,4 +144,5 @@ export class SelfRepairService {
   }
 }
 
+/** @deprecated Use container.resolve(TOKENS.Repair) from createContextOS() instead. */
 export const repairService = new SelfRepairService();

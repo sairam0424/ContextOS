@@ -38,7 +38,7 @@ export class LockingService {
 
 let _lockingInstance: LockingService | null = null;
 
-/** Lazily-initialized singleton for backward compatibility. */
+/** @deprecated Use container.resolve(TOKENS.Locking) from createContextOS() instead. */
 export function getLockingService(): LockingService {
   if (!_lockingInstance) {
     _lockingInstance = new LockingService(getSharedDatabase());

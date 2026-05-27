@@ -43,4 +43,5 @@ export class MissionService {
   }
 }
 
+/** @deprecated Use container.resolve(TOKENS.Mission) from createContextOS() instead. */
 export const missionService = new MissionService();

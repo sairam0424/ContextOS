@@ -114,4 +114,5 @@ export class CapabilityService {
   }
 }
 
+/** @deprecated Use container.resolve(TOKENS.Capability) from createContextOS() instead. */
 export const capabilityService = new CapabilityService();

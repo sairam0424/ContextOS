@@ -54,6 +54,7 @@ export class WorkspaceConfigService {
 
 let _sharedConfig: WorkspaceConfigService | null = null;
 
+/** @deprecated Use container.resolve(TOKENS.WorkspaceConfig) from createContextOS() instead. */
 export function getWorkspaceConfig(): WorkspaceConfigService {
   if (!_sharedConfig) {
     _sharedConfig = new WorkspaceConfigService();
@@ -61,4 +62,5 @@ export function getWorkspaceConfig(): WorkspaceConfigService {
   return _sharedConfig;
 }
 
+/** @deprecated Use container.resolve(TOKENS.WorkspaceConfig) from createContextOS() instead. */
 export const workspaceConfigService = getWorkspaceConfig();

@@ -79,4 +79,5 @@ export class IntelligenceQueueService {
     }
 }
 
+/** @deprecated Use container.resolve(TOKENS.IntelligenceQueue) from createContextOS() instead. */
 export const intelligenceQueue = new IntelligenceQueueService();
