@@ -2,6 +2,20 @@ import type { Token } from './container.js';
 import type { DatabaseService } from '../database/index.js';
 import type { WorkspaceEventBus } from '../events/event-bus.js';
 import type { EventStore } from '../events/event-store.js';
+import type { IntelligenceService } from '../services/intelligence.js';
+import type { IntelligenceQueueService } from '../services/intelligence-queue.js';
+import type { KnowledgeGraphService } from '../services/knowledge-graph.js';
+import type { EmbeddingService } from '../services/embedding.js';
+import type { SamplingService } from '../services/sampling.js';
+import type { ValidationService } from '../services/validation.js';
+import type { WatchService } from '../services/watch.js';
+import type { SelfRepairService } from '../services/repair.js';
+import type { LockingService } from '../services/locking.js';
+import type { MissionService } from '../services/mission.js';
+import type { FederationService } from '../services/federation.js';
+import type { CapabilityService } from '../services/capability.js';
+import type { WorkspaceConfigService } from '../services/workspace-config.js';
+import type { WorkspaceService } from '../services/workspace.js';
 import type { AgentRegistry } from '../agents/registry.js';
 import type { MessageBus } from '../agents/message-bus.js';
 import type { TaskGraph } from '../orchestration/task-graph.js';
@@ -15,20 +29,20 @@ export const TOKENS = {
   Database: Symbol.for('ctx:Database') as Token<DatabaseService>,
   EventBus: Symbol.for('ctx:EventBus') as Token<WorkspaceEventBus>,
   EventStore: Symbol.for('ctx:EventStore') as Token<EventStore>,
-  Intelligence: Symbol.for('ctx:Intelligence') as Token<unknown>,
-  IntelligenceQueue: Symbol.for('ctx:IntelligenceQueue') as Token<unknown>,
-  KnowledgeGraph: Symbol.for('ctx:KnowledgeGraph') as Token<unknown>,
-  Embedding: Symbol.for('ctx:Embedding') as Token<unknown>,
-  Sampling: Symbol.for('ctx:Sampling') as Token<unknown>,
-  Validation: Symbol.for('ctx:Validation') as Token<unknown>,
-  Watch: Symbol.for('ctx:Watch') as Token<unknown>,
-  Repair: Symbol.for('ctx:Repair') as Token<unknown>,
-  Locking: Symbol.for('ctx:Locking') as Token<unknown>,
-  Mission: Symbol.for('ctx:Mission') as Token<unknown>,
-  Federation: Symbol.for('ctx:Federation') as Token<unknown>,
-  Capability: Symbol.for('ctx:Capability') as Token<unknown>,
-  WorkspaceConfig: Symbol.for('ctx:WorkspaceConfig') as Token<unknown>,
-  Workspace: Symbol.for('ctx:Workspace') as Token<unknown>,
+  Intelligence: Symbol.for('ctx:Intelligence') as Token<IntelligenceService>,
+  IntelligenceQueue: Symbol.for('ctx:IntelligenceQueue') as Token<IntelligenceQueueService>,
+  KnowledgeGraph: Symbol.for('ctx:KnowledgeGraph') as Token<KnowledgeGraphService>,
+  Embedding: Symbol.for('ctx:Embedding') as Token<EmbeddingService>,
+  Sampling: Symbol.for('ctx:Sampling') as Token<SamplingService>,
+  Validation: Symbol.for('ctx:Validation') as Token<ValidationService>,
+  Watch: Symbol.for('ctx:Watch') as Token<WatchService>,
+  Repair: Symbol.for('ctx:Repair') as Token<SelfRepairService>,
+  Locking: Symbol.for('ctx:Locking') as Token<LockingService>,
+  Mission: Symbol.for('ctx:Mission') as Token<MissionService>,
+  Federation: Symbol.for('ctx:Federation') as Token<FederationService>,
+  Capability: Symbol.for('ctx:Capability') as Token<CapabilityService>,
+  WorkspaceConfig: Symbol.for('ctx:WorkspaceConfig') as Token<WorkspaceConfigService>,
+  Workspace: Symbol.for('ctx:Workspace') as Token<WorkspaceService>,
   AgentRegistry: Symbol.for('ctx:AgentRegistry') as Token<AgentRegistry>,
   MessageBus: Symbol.for('ctx:MessageBus') as Token<MessageBus>,
   TaskGraph: Symbol.for('ctx:TaskGraph') as Token<TaskGraph>,
