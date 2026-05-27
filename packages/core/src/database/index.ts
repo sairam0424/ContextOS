@@ -109,7 +109,7 @@ export class DatabaseService {
 
   // --- Locks ---
 
-  acquireLock(p: string, agentId: string, durationMs?: number) { this.locks.acquire(p, agentId, durationMs); }
+  acquireLock(p: string, agentId: string, durationMs?: number) { return this.locks.acquire(p, agentId, durationMs); }
   releaseLock(p: string, agentId: string) { this.locks.release(p, agentId); }
   getLock(p: string) { return this.locks.get(p); }
 
@@ -137,6 +137,7 @@ export class DatabaseService {
   getRawDb(): RawDB { return this.db; }
 
   close() {
+    this.db.pragma('wal_checkpoint(TRUNCATE)');
     this.db.close();
     log.debug('Database connection closed');
   }
@@ -151,6 +152,7 @@ let _sharedInstance: DatabaseService | null = null;
 /**
  * Returns a lazily-initialized shared DatabaseService singleton.
  * Prefer `createContextOS()` factory for new code — this exists for backward compatibility.
+ * @deprecated Use container.resolve(TOKENS.Database) from createContextOS() instead.
  */
 export function getSharedDatabase(): DatabaseService {
   if (!_sharedInstance) {

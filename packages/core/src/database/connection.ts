@@ -13,6 +13,7 @@ export function createConnection(dbPath: string): Database.Database {
   const db = new Database(dbPath);
   sqliteVec.load(db);
   db.pragma('journal_mode = WAL');
+  db.pragma('wal_autocheckpoint = 1000');
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
   db.pragma('synchronous = NORMAL');
