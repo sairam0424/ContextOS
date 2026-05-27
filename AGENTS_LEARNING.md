@@ -77,6 +77,31 @@ Treat this file as the primary handoff mechanism. If a task is interrupted, the 
 
 ---
 
+## Session Notes — 2026-05-27 (v2.0 Comprehensive Upgrade)
+
+### Architectural Decisions
+- DI container now registers ALL 23 services (9 existing + 14 new). Module-level singletons deprecated with @deprecated JSDoc — consumers should migrate to `container.resolve(TOKENS.Xxx)`.
+- Lock table redesigned from `path#read:agentId` encoding to composite PK `(path, agent_id, mode)`. Migration in schema.ts handles legacy data automatically.
+- Event system upgraded with priority-based handlers (default 0) and wildcard subscriptions (`*`, `prefix.*`). Backward compatible.
+- Embedding service now has failover chain: Gemini → Ollama → Transformers (3-strike threshold, sticky failover).
+
+### Patterns Discovered
+- When adding test files to a Vite/React workspace, exclude `__tests__/` from `tsconfig.app.json` to prevent build failures (test deps not available at build time).
+- The `better-sqlite3` native module ERR_DLOPEN_FAILED is a pre-existing env issue (Node ABI mismatch) — not a regression. Fix with `npm rebuild`.
+- 3 of the 6 bugs in `docs/v2-upgrade-plan.md` (B2, B3, B5) were already fixed but the plan wasn't updated. Always verify claims from planning docs against current code.
+
+### Security Fixes Applied
+- Hardcoded NPM token removed from `.npmrc` (replaced with `${NPM_TOKEN}` env var). Token must be revoked manually in npm dashboard.
+- Credential leakage in embedding service fixed (3 `JSON.stringify(data)` calls sanitized).
+- Lock release tool now validates ownership before returning success.
+
+### Anti-Patterns Identified
+- Module-level singletons (`getSharedXxx()`) bypass DI and make testing harder. Always resolve from container in new code.
+- Audit log and event store had no pruning — unbounded growth. Now auto-pruned (90 days / 7 days respectively).
+- MCP `mcp.json` manifest was out of sync with registered tools (7 listed vs 17 actual). Keep manifest auto-generated or verified in CI.
+
+---
+
 ## Session Notes — 2026-03-31 (Day 4)
 
 ### New Insights
