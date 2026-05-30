@@ -43,6 +43,9 @@ export { toPrometheusText } from './metrics/index.js';
 export { MemoryStream, ReflectionEngine, SkillLibrary, LanguageAgentTreeSearch } from './cognitive/index.js';
 export type { MemoryEntry, MemoryType, MemoryStreamConfig, RetrievalScore, Reflection, Skill, SkillExecutionResult, TreeNode, LATSConfig } from './cognitive/index.js';
 
+export { TemporalGraphService } from './services/temporal-graph.js';
+export type { TemporalEdge, TemporalQuery, NodeMetric, NodeEvent, Hyperedge, ImpactResult } from './services/temporal-graph.js';
+
 /**
  * Checks whether any component of targetPath (relative to rootPath) is a symlink.
  * Walks from rootPath downward through each segment of the target.

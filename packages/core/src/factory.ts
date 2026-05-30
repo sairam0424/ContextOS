@@ -29,6 +29,7 @@ import { MemoryStream } from './cognitive/memory-stream.js';
 import { ReflectionEngine } from './cognitive/reflection-engine.js';
 import { SkillLibrary } from './cognitive/skill-library.js';
 import { LanguageAgentTreeSearch } from './cognitive/tree-search.js';
+import { TemporalGraphService } from './services/temporal-graph.js';
 
 /**
  * Configuration for initializing a ContextOS instance.
@@ -216,6 +217,12 @@ export function createContextOS(config: ContextOSConfig): ContextOS {
 
   container.register(TOKENS.TreeSearch, () => {
     return new LanguageAgentTreeSearch();
+  });
+
+  container.register(TOKENS.TemporalGraph, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    const bus = c.resolve(TOKENS.EventBus);
+    return new TemporalGraphService(db.getRawDb(), bus);
   });
 
   // --- Resolve the service graph (lazy singletons instantiated on first access) ---
