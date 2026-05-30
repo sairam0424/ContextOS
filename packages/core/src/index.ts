@@ -46,6 +46,9 @@ export type { MemoryEntry, MemoryType, MemoryStreamConfig, RetrievalScore, Refle
 export { TemporalGraphService } from './services/temporal-graph.js';
 export type { TemporalEdge, TemporalQuery, NodeMetric, NodeEvent, Hyperedge, ImpactResult } from './services/temporal-graph.js';
 
+export { CapabilityTokenService, TrustEngine, PolicyEngine, AnomalyDetector } from './governance/index.js';
+export type { CapabilityGrant, CapabilityToken, AuthorizationResult, TrustDimension, TrustScore, TrustEvent, PolicyEffect, PolicyCondition, PolicyRule, Policy, PolicyDecision, AnomalySeverity, AnomalyType, AnomalyAlert } from './governance/index.js';
+
 /**
  * Checks whether any component of targetPath (relative to rootPath) is a symlink.
  * Walks from rootPath downward through each segment of the target.
