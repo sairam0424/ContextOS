@@ -29,6 +29,9 @@ import type { ReflectionEngine } from '../cognitive/reflection-engine.js';
 import type { SkillLibrary } from '../cognitive/skill-library.js';
 import type { LanguageAgentTreeSearch } from '../cognitive/tree-search.js';
 import type { TemporalGraphService } from '../services/temporal-graph.js';
+import type { SwarmOrchestrator } from '../orchestration/swarm-orchestrator.js';
+import type { NegotiationService } from '../orchestration/negotiation.js';
+import type { ConsensusService } from '../orchestration/consensus.js';
 
 export const TOKENS = {
   Database: Symbol.for('ctx:Database') as Token<DatabaseService>,
@@ -61,6 +64,9 @@ export const TOKENS = {
   SkillLibrary: Symbol.for('ctx:SkillLibrary') as Token<SkillLibrary>,
   TreeSearch: Symbol.for('ctx:TreeSearch') as Token<LanguageAgentTreeSearch>,
   TemporalGraph: Symbol.for('ctx:TemporalGraph') as Token<TemporalGraphService>,
+  SwarmOrchestrator: Symbol.for('ctx:SwarmOrchestrator') as Token<SwarmOrchestrator>,
+  Negotiation: Symbol.for('ctx:Negotiation') as Token<NegotiationService>,
+  Consensus: Symbol.for('ctx:Consensus') as Token<ConsensusService>,
 } as const;
 
 export type ServiceToken = typeof TOKENS[keyof typeof TOKENS];
