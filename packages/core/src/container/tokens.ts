@@ -28,6 +28,7 @@ import type { MemoryStream } from '../cognitive/memory-stream.js';
 import type { ReflectionEngine } from '../cognitive/reflection-engine.js';
 import type { SkillLibrary } from '../cognitive/skill-library.js';
 import type { LanguageAgentTreeSearch } from '../cognitive/tree-search.js';
+import type { TemporalGraphService } from '../services/temporal-graph.js';
 
 export const TOKENS = {
   Database: Symbol.for('ctx:Database') as Token<DatabaseService>,
@@ -59,6 +60,7 @@ export const TOKENS = {
   ReflectionEngine: Symbol.for('ctx:ReflectionEngine') as Token<ReflectionEngine>,
   SkillLibrary: Symbol.for('ctx:SkillLibrary') as Token<SkillLibrary>,
   TreeSearch: Symbol.for('ctx:TreeSearch') as Token<LanguageAgentTreeSearch>,
+  TemporalGraph: Symbol.for('ctx:TemporalGraph') as Token<TemporalGraphService>,
 } as const;
 
 export type ServiceToken = typeof TOKENS[keyof typeof TOKENS];
