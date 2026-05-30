@@ -37,6 +37,10 @@ import { CapabilityTokenService } from './governance/capability-token.js';
 import { TrustEngine } from './governance/trust-engine.js';
 import { PolicyEngine } from './governance/policy-engine.js';
 import { AnomalyDetector } from './governance/anomaly-detection.js';
+import { EventProcessor } from './streaming/event-processor.js';
+import { PredictiveHealthMonitor } from './streaming/predictive-health.js';
+import { KnowledgeDistiller } from './streaming/knowledge-distiller.js';
+import { HierarchicalMemory } from './streaming/hierarchical-memory.js';
 
 /**
  * Configuration for initializing a ContextOS instance.
@@ -274,6 +278,26 @@ export function createContextOS(config: ContextOSConfig): ContextOS {
     const db = c.resolve(TOKENS.Database);
     const bus = c.resolve(TOKENS.EventBus);
     return new AnomalyDetector(db.getRawDb(), bus);
+  });
+
+  container.register(TOKENS.EventProcessor, (c) => {
+    const bus = c.resolve(TOKENS.EventBus);
+    return new EventProcessor(bus);
+  });
+
+  container.register(TOKENS.PredictiveHealth, (c) => {
+    const bus = c.resolve(TOKENS.EventBus);
+    return new PredictiveHealthMonitor(bus);
+  });
+
+  container.register(TOKENS.KnowledgeDistiller, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    return new KnowledgeDistiller(db.getRawDb());
+  });
+
+  container.register(TOKENS.HierarchicalMemory, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    return new HierarchicalMemory(db.getRawDb());
   });
 
   // --- Resolve the service graph (lazy singletons instantiated on first access) ---

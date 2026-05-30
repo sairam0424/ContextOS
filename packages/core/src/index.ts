@@ -49,6 +49,9 @@ export type { TemporalEdge, TemporalQuery, NodeMetric, NodeEvent, Hyperedge, Imp
 export { CapabilityTokenService, TrustEngine, PolicyEngine, AnomalyDetector } from './governance/index.js';
 export type { CapabilityGrant, CapabilityToken, AuthorizationResult, TrustDimension, TrustScore, TrustEvent, PolicyEffect, PolicyCondition, PolicyRule, Policy, PolicyDecision, AnomalySeverity, AnomalyType, AnomalyAlert } from './governance/index.js';
 
+export { EventProcessor, PredictiveHealthMonitor, KnowledgeDistiller, HierarchicalMemory } from './streaming/index.js';
+export type { PatternType, PatternAction, BurstConfig, SequenceConfig, AbsenceConfig, PatternRule, PatternMatch, HealthState, HealthPrediction, ServiceSignal, DistilledKnowledge, DistillationResult, MemoryLevel, MemorySummary, CompactionConfig, CompactionResult } from './streaming/index.js';
+
 /**
  * Checks whether any component of targetPath (relative to rootPath) is a symlink.
  * Walks from rootPath downward through each segment of the target.

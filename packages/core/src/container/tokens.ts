@@ -36,6 +36,10 @@ import type { CapabilityTokenService } from '../governance/capability-token.js';
 import type { TrustEngine } from '../governance/trust-engine.js';
 import type { PolicyEngine } from '../governance/policy-engine.js';
 import type { AnomalyDetector } from '../governance/anomaly-detection.js';
+import type { EventProcessor } from '../streaming/event-processor.js';
+import type { PredictiveHealthMonitor } from '../streaming/predictive-health.js';
+import type { KnowledgeDistiller } from '../streaming/knowledge-distiller.js';
+import type { HierarchicalMemory } from '../streaming/hierarchical-memory.js';
 
 export const TOKENS = {
   Database: Symbol.for('ctx:Database') as Token<DatabaseService>,
@@ -75,6 +79,10 @@ export const TOKENS = {
   TrustEngine: Symbol.for('ctx:TrustEngine') as Token<TrustEngine>,
   PolicyEngine: Symbol.for('ctx:PolicyEngine') as Token<PolicyEngine>,
   AnomalyDetector: Symbol.for('ctx:AnomalyDetector') as Token<AnomalyDetector>,
+  EventProcessor: Symbol.for('ctx:EventProcessor') as Token<EventProcessor>,
+  PredictiveHealth: Symbol.for('ctx:PredictiveHealth') as Token<PredictiveHealthMonitor>,
+  KnowledgeDistiller: Symbol.for('ctx:KnowledgeDistiller') as Token<KnowledgeDistiller>,
+  HierarchicalMemory: Symbol.for('ctx:HierarchicalMemory') as Token<HierarchicalMemory>,
 } as const;
 
 export type ServiceToken = typeof TOKENS[keyof typeof TOKENS];

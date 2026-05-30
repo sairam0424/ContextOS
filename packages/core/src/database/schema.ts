@@ -485,6 +485,36 @@ export function initializeSchema(db: RawDB): void {
   `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_anomaly_alerts_agent ON anomaly_alerts(agent_id, resolved)`);
 
+  // --- Streaming Intelligence tables (Phase 5: Beast Mode v3) ---
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS distilled_knowledge (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      corridor TEXT UNIQUE NOT NULL,
+      summary TEXT NOT NULL,
+      query_cluster TEXT NOT NULL DEFAULT '[]',
+      access_count INTEGER DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_distilled_corridor ON distilled_knowledge(corridor)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_distilled_access ON distilled_knowledge(access_count DESC)`);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_summaries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      level INTEGER NOT NULL,
+      agent_id TEXT NOT NULL,
+      period_start INTEGER NOT NULL,
+      period_end INTEGER NOT NULL,
+      summary TEXT NOT NULL,
+      token_count INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_memory_summaries_agent ON memory_summaries(agent_id, level, period_start)`);
+
   log.debug('Schema initialization complete');
 }
 
