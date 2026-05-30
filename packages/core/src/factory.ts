@@ -41,6 +41,10 @@ import { EventProcessor } from './streaming/event-processor.js';
 import { PredictiveHealthMonitor } from './streaming/predictive-health.js';
 import { KnowledgeDistiller } from './streaming/knowledge-distiller.js';
 import { HierarchicalMemory } from './streaming/hierarchical-memory.js';
+import { GitIntelligenceService } from './services/git-intelligence.js';
+import { MultiModalFusionService } from './services/fusion-scoring.js';
+import { GraphRAGService } from './services/graph-rag.js';
+import { PredictiveFailureService } from './resilience/predictive-failure.js';
 
 /**
  * Configuration for initializing a ContextOS instance.
@@ -298,6 +302,26 @@ export function createContextOS(config: ContextOSConfig): ContextOS {
   container.register(TOKENS.HierarchicalMemory, (c) => {
     const db = c.resolve(TOKENS.Database);
     return new HierarchicalMemory(db.getRawDb());
+  });
+
+  container.register(TOKENS.GitIntelligence, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    return new GitIntelligenceService(db.getRawDb(), config.workspaceRoot);
+  });
+
+  container.register(TOKENS.FusionScoring, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    return new MultiModalFusionService(db.getRawDb());
+  });
+
+  container.register(TOKENS.GraphRAG, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    return new GraphRAGService(db.getRawDb());
+  });
+
+  container.register(TOKENS.PredictiveFailure, (c) => {
+    const bus = c.resolve(TOKENS.EventBus);
+    return new PredictiveFailureService(bus);
   });
 
   // --- Resolve the service graph (lazy singletons instantiated on first access) ---

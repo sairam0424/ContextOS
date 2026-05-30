@@ -19,6 +19,7 @@ import { registerTemporalGraphTools } from "./tools/temporal-graph.js";
 import { registerSwarmTools } from "./tools/swarm.js";
 import { registerGovernanceTools } from "./tools/governance.js";
 import { registerIntelligenceStreamTools } from "./tools/intelligence-stream.js";
+import { registerPredictiveTools } from "./tools/predictive.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts/index.js";
 import { setLoggingServer } from "./logging.js";
@@ -58,6 +59,7 @@ export async function createMcpServer(version: string): Promise<McpServer> {
   registerSwarmTools(server);
   registerGovernanceTools(server);
   registerIntelligenceStreamTools(server);
+  registerPredictiveTools(server);
 
   // Resources
   registerResources(server);

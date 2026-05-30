@@ -52,6 +52,18 @@ export type { CapabilityGrant, CapabilityToken, AuthorizationResult, TrustDimens
 export { EventProcessor, PredictiveHealthMonitor, KnowledgeDistiller, HierarchicalMemory } from './streaming/index.js';
 export type { PatternType, PatternAction, BurstConfig, SequenceConfig, AbsenceConfig, PatternRule, PatternMatch, HealthState, HealthPrediction, ServiceSignal, DistilledKnowledge, DistillationResult, MemoryLevel, MemorySummary, CompactionConfig, CompactionResult } from './streaming/index.js';
 
+export { GitIntelligenceService } from './services/git-intelligence.js';
+export type { CoChangeEdge, FileOwnership, ChangeVelocity } from './services/git-intelligence.js';
+
+export { MultiModalFusionService } from './services/fusion-scoring.js';
+export type { FusionWeights, FusionResult, FusionCandidate } from './services/fusion-scoring.js';
+
+export { GraphRAGService } from './services/graph-rag.js';
+export type { Community, CommunitySearchResult, GraphRAGResult } from './services/graph-rag.js';
+
+export { PredictiveFailureService } from './resilience/predictive-failure.js';
+export type { PredictiveState, CUSUMResult, ProactiveAction } from './resilience/predictive-failure.js';
+
 /**
  * Checks whether any component of targetPath (relative to rootPath) is a symlink.
  * Walks from rootPath downward through each segment of the target.
