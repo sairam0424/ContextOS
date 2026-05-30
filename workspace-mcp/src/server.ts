@@ -14,6 +14,7 @@ import { registerPulseTool } from "./tools/pulse.js";
 import { registerMissionTool } from "./tools/mission.js";
 import { registerGraphQueryTool } from "./tools/graph-query.js";
 import { registerWorkspaceNotifyTool } from "./tools/workspace-notify.js";
+import { registerCognitiveTools } from "./tools/cognitive.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts/index.js";
 import { setLoggingServer } from "./logging.js";
@@ -48,6 +49,7 @@ export async function createMcpServer(version: string): Promise<McpServer> {
   registerMissionTool(server);
   registerGraphQueryTool(server);
   registerWorkspaceNotifyTool(server);
+  registerCognitiveTools(server);
 
   // Resources
   registerResources(server);

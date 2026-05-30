@@ -25,6 +25,10 @@ import { CapabilityService } from './services/capability.js';
 import { WorkspaceConfigService } from './services/workspace-config.js';
 import { WorkspaceService } from './services/workspace.js';
 import { MetricsCollector } from './metrics/collector.js';
+import { MemoryStream } from './cognitive/memory-stream.js';
+import { ReflectionEngine } from './cognitive/reflection-engine.js';
+import { SkillLibrary } from './cognitive/skill-library.js';
+import { LanguageAgentTreeSearch } from './cognitive/tree-search.js';
 
 /**
  * Configuration for initializing a ContextOS instance.
@@ -190,6 +194,28 @@ export function createContextOS(config: ContextOSConfig): ContextOS {
 
   container.register(TOKENS.Metrics, () => {
     return new MetricsCollector();
+  });
+
+  container.register(TOKENS.MemoryStream, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    const bus = c.resolve(TOKENS.EventBus);
+    return new MemoryStream(db.getRawDb(), bus);
+  });
+
+  container.register(TOKENS.ReflectionEngine, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    const bus = c.resolve(TOKENS.EventBus);
+    const memory = c.resolve(TOKENS.MemoryStream);
+    return new ReflectionEngine(db.getRawDb(), bus, memory);
+  });
+
+  container.register(TOKENS.SkillLibrary, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    return new SkillLibrary(db.getRawDb());
+  });
+
+  container.register(TOKENS.TreeSearch, () => {
+    return new LanguageAgentTreeSearch();
   });
 
   // --- Resolve the service graph (lazy singletons instantiated on first access) ---

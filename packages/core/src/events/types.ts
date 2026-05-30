@@ -20,7 +20,11 @@ export type WorkspaceEvent =
   | { type: 'task.completed'; taskId: string }
   | { type: 'task.failed'; taskId: string }
   | { type: 'task.retried'; taskId: string; attempt: number; nextRetryAt: number }
-  | { type: 'message.expired'; messageId: string; topic: string };
+  | { type: 'message.expired'; messageId: string; topic: string }
+  | { type: 'memory.observed'; agentId: string; memoryId: number }
+  | { type: 'memory.reflected'; agentId: string; reflectionId: number }
+  | { type: 'skill.stored'; skillId: number; name: string }
+  | { type: 'skill.executed'; skillId: number; success: boolean };
 
 export type EventType = WorkspaceEvent['type'];
 
