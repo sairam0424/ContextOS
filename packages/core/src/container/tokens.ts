@@ -40,6 +40,10 @@ import type { EventProcessor } from '../streaming/event-processor.js';
 import type { PredictiveHealthMonitor } from '../streaming/predictive-health.js';
 import type { KnowledgeDistiller } from '../streaming/knowledge-distiller.js';
 import type { HierarchicalMemory } from '../streaming/hierarchical-memory.js';
+import type { GitIntelligenceService } from '../services/git-intelligence.js';
+import type { MultiModalFusionService } from '../services/fusion-scoring.js';
+import type { GraphRAGService } from '../services/graph-rag.js';
+import type { PredictiveFailureService } from '../resilience/predictive-failure.js';
 
 export const TOKENS = {
   Database: Symbol.for('ctx:Database') as Token<DatabaseService>,
@@ -83,6 +87,10 @@ export const TOKENS = {
   PredictiveHealth: Symbol.for('ctx:PredictiveHealth') as Token<PredictiveHealthMonitor>,
   KnowledgeDistiller: Symbol.for('ctx:KnowledgeDistiller') as Token<KnowledgeDistiller>,
   HierarchicalMemory: Symbol.for('ctx:HierarchicalMemory') as Token<HierarchicalMemory>,
+  GitIntelligence: Symbol.for('ctx:GitIntelligence') as Token<GitIntelligenceService>,
+  FusionScoring: Symbol.for('ctx:FusionScoring') as Token<MultiModalFusionService>,
+  GraphRAG: Symbol.for('ctx:GraphRAG') as Token<GraphRAGService>,
+  PredictiveFailure: Symbol.for('ctx:PredictiveFailure') as Token<PredictiveFailureService>,
 } as const;
 
 export type ServiceToken = typeof TOKENS[keyof typeof TOKENS];
