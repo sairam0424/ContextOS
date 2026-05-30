@@ -30,8 +30,8 @@ export type { WorkspaceEvent, EventType, EventPayload, EventHandler } from './ev
 export { AgentRegistry, MessageBus } from './agents/index.js';
 export type { AgentRecord, RegisterOpts, AgentMessage, SendMessageOpts, AgentStatus } from './agents/index.js';
 
-export { TaskGraph, TaskScheduler, ConflictResolver } from './orchestration/index.js';
-export type { TaskNode, TaskStatus, CreateTaskOpts, MissionProgress, LockRequest, RetryConfig } from './orchestration/index.js';
+export { TaskGraph, TaskScheduler, ConflictResolver, SwarmOrchestrator, NegotiationService, ConsensusService } from './orchestration/index.js';
+export type { TaskNode, TaskStatus, CreateTaskOpts, MissionProgress, LockRequest, RetryConfig, TopologyMode, SwarmStatus, SwarmConfig, SwarmSession, TaskLedger, ProgressLedger, TickResult, Proposal, ProposalStatus, VoteRequest, Vote, ConsensusResult } from './orchestration/index.js';
 
 export { CircuitBreaker, AuditLog } from './resilience/index.js';
 export type { CircuitBreakerConfig, AuditEntry } from './resilience/index.js';

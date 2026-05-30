@@ -24,7 +24,12 @@ export type WorkspaceEvent =
   | { type: 'memory.observed'; agentId: string; memoryId: number }
   | { type: 'memory.reflected'; agentId: string; reflectionId: number }
   | { type: 'skill.stored'; skillId: number; name: string }
-  | { type: 'skill.executed'; skillId: number; success: boolean };
+  | { type: 'skill.executed'; skillId: number; success: boolean }
+  | { type: 'swarm.spawned'; sessionId: string; missionId: string; topology: string }
+  | { type: 'swarm.stalled'; sessionId: string; stallCount: number }
+  | { type: 'swarm.replanned'; sessionId: string; revisionCount: number }
+  | { type: 'swarm.completed'; sessionId: string; missionId: string }
+  | { type: 'swarm.aborted'; sessionId: string; missionId: string; reason?: string };
 
 export type EventType = WorkspaceEvent['type'];
 

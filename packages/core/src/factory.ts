@@ -30,6 +30,9 @@ import { ReflectionEngine } from './cognitive/reflection-engine.js';
 import { SkillLibrary } from './cognitive/skill-library.js';
 import { LanguageAgentTreeSearch } from './cognitive/tree-search.js';
 import { TemporalGraphService } from './services/temporal-graph.js';
+import { SwarmOrchestrator } from './orchestration/swarm-orchestrator.js';
+import { NegotiationService } from './orchestration/negotiation.js';
+import { ConsensusService } from './orchestration/consensus.js';
 
 /**
  * Configuration for initializing a ContextOS instance.
@@ -223,6 +226,26 @@ export function createContextOS(config: ContextOSConfig): ContextOS {
     const db = c.resolve(TOKENS.Database);
     const bus = c.resolve(TOKENS.EventBus);
     return new TemporalGraphService(db.getRawDb(), bus);
+  });
+
+  container.register(TOKENS.SwarmOrchestrator, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    const bus = c.resolve(TOKENS.EventBus);
+    const scheduler = c.resolve(TOKENS.TaskScheduler);
+    const registry = c.resolve(TOKENS.AgentRegistry);
+    return new SwarmOrchestrator(db.getRawDb(), bus, scheduler, registry);
+  });
+
+  container.register(TOKENS.Negotiation, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    const bus = c.resolve(TOKENS.EventBus);
+    return new NegotiationService(db.getRawDb(), bus);
+  });
+
+  container.register(TOKENS.Consensus, (c) => {
+    const db = c.resolve(TOKENS.Database);
+    const bus = c.resolve(TOKENS.EventBus);
+    return new ConsensusService(db.getRawDb(), bus);
   });
 
   // --- Resolve the service graph (lazy singletons instantiated on first access) ---
