@@ -1,16 +1,31 @@
 name: Validate
+
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main, develop]
   push:
-    branches: [main, master]
+    branches: [main, develop]
 
 concurrency:
   group: validate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  validate:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run sync:assets
+      - run: npm run build
+      - name: Lint dashboard
+        run: npm run lint -w workspace-dashboard
+
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -22,17 +37,87 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
       - run: npm ci
-      - run: npm audit --audit-level=high || true
       - run: npm run sync:assets
       - run: npm run build
       - run: npm run test
       - run: npm run validate
 
-      - name: Generate coverage report
+  coverage:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run sync:assets
+      - run: npm run build
+
+      - name: Run core coverage
         run: cd packages/core && npm run test:coverage
 
-      - name: Upload coverage artifact
+      - name: Run dashboard coverage
+        run: cd workspace-dashboard && npx vitest run --coverage
+        continue-on-error: true
+
+      - name: Upload core coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-node-${{ matrix.node-version }}
+          name: coverage-core
           path: packages/core/coverage/
+
+      - name: Dashboard coverage PR comment
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          working-directory: workspace-dashboard
+          name: 'Dashboard Coverage'
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - name: Security audit
+        run: npm audit --audit-level=high
+
+  label:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+  benchmark:
+    if: github.event_name == 'pull_request'
+    needs: [test]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run sync:assets
+      - run: npm run build
+      - name: Run performance benchmark
+        run: node scripts/perf-benchmark.js
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-output/

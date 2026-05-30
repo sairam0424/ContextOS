@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/sairam0424/ContextOS#readme
+    about: Check the README for setup and usage docs

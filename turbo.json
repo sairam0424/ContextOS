@@ -6,10 +6,19 @@
       "inputs": ["src/**", "tsconfig.json", "package.json"],
       "outputs": ["dist/**"]
     },
+    "lint": {
+      "inputs": ["src/**", "eslint.config.*", "tsconfig.json"],
+      "outputs": []
+    },
     "test": {
       "dependsOn": ["build"],
       "inputs": ["src/**", "tsconfig.json", "package.json"],
       "outputs": []
+    },
+    "test:coverage": {
+      "dependsOn": ["build"],
+      "inputs": ["src/**"],
+      "outputs": ["coverage/**"]
     },
     "validate": {
       "dependsOn": ["build"],

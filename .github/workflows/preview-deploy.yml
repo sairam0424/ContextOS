@@ -1,0 +1,48 @@
+name: Preview Deploy
+
+on:
+  pull_request:
+    paths:
+      - 'workspace-dashboard/**'
+      - 'package-lock.json'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      pull-requests: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build dashboard with PR-specific base path
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+        run: cd workspace-dashboard && npx vite build --base="/ContextOS/pr-${PR_NUMBER}/"
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./workspace-dashboard/dist
+          destination_dir: pr-${{ github.event.number }}
+          keep_files: true
+
+      - name: Comment preview URL
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: preview-deploy
+          message: |
+            ## Preview Deployment
+
+            Your dashboard preview is ready:
+            https://sairam0424.github.io/ContextOS/pr-${{ github.event.number }}/

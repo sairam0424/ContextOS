@@ -1,0 +1,58 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the feature you'd like to see in ContextOS.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? What's the current pain point?
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How would you like this to work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any other approaches you've considered?
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected Package
+      description: Which package would this affect?
+      multiple: true
+      options:
+        - "@context-os/core"
+        - "@context-os/cli"
+        - "@context-os/mcp"
+        - "workspace-dashboard"
+        - "New package"
+        - "Unknown"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this to your workflow?
+      options:
+        - "Nice to have"
+        - "Important"
+        - "Critical blocker"
