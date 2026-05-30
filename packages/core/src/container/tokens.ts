@@ -32,6 +32,10 @@ import type { TemporalGraphService } from '../services/temporal-graph.js';
 import type { SwarmOrchestrator } from '../orchestration/swarm-orchestrator.js';
 import type { NegotiationService } from '../orchestration/negotiation.js';
 import type { ConsensusService } from '../orchestration/consensus.js';
+import type { CapabilityTokenService } from '../governance/capability-token.js';
+import type { TrustEngine } from '../governance/trust-engine.js';
+import type { PolicyEngine } from '../governance/policy-engine.js';
+import type { AnomalyDetector } from '../governance/anomaly-detection.js';
 
 export const TOKENS = {
   Database: Symbol.for('ctx:Database') as Token<DatabaseService>,
@@ -67,6 +71,10 @@ export const TOKENS = {
   SwarmOrchestrator: Symbol.for('ctx:SwarmOrchestrator') as Token<SwarmOrchestrator>,
   Negotiation: Symbol.for('ctx:Negotiation') as Token<NegotiationService>,
   Consensus: Symbol.for('ctx:Consensus') as Token<ConsensusService>,
+  CapabilityToken: Symbol.for('ctx:CapabilityToken') as Token<CapabilityTokenService>,
+  TrustEngine: Symbol.for('ctx:TrustEngine') as Token<TrustEngine>,
+  PolicyEngine: Symbol.for('ctx:PolicyEngine') as Token<PolicyEngine>,
+  AnomalyDetector: Symbol.for('ctx:AnomalyDetector') as Token<AnomalyDetector>,
 } as const;
 
 export type ServiceToken = typeof TOKENS[keyof typeof TOKENS];
