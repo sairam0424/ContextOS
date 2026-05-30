@@ -24,6 +24,10 @@ import type { ConflictResolver } from '../orchestration/conflict-resolver.js';
 import type { CircuitBreaker } from '../resilience/circuit-breaker.js';
 import type { AuditLog } from '../resilience/audit-log.js';
 import type { MetricsCollector } from '../metrics/collector.js';
+import type { MemoryStream } from '../cognitive/memory-stream.js';
+import type { ReflectionEngine } from '../cognitive/reflection-engine.js';
+import type { SkillLibrary } from '../cognitive/skill-library.js';
+import type { LanguageAgentTreeSearch } from '../cognitive/tree-search.js';
 
 export const TOKENS = {
   Database: Symbol.for('ctx:Database') as Token<DatabaseService>,
@@ -51,6 +55,10 @@ export const TOKENS = {
   CircuitBreaker: Symbol.for('ctx:CircuitBreaker') as Token<CircuitBreaker>,
   AuditLog: Symbol.for('ctx:AuditLog') as Token<AuditLog>,
   Metrics: Symbol.for('ctx:Metrics') as Token<MetricsCollector>,
+  MemoryStream: Symbol.for('ctx:MemoryStream') as Token<MemoryStream>,
+  ReflectionEngine: Symbol.for('ctx:ReflectionEngine') as Token<ReflectionEngine>,
+  SkillLibrary: Symbol.for('ctx:SkillLibrary') as Token<SkillLibrary>,
+  TreeSearch: Symbol.for('ctx:TreeSearch') as Token<LanguageAgentTreeSearch>,
 } as const;
 
 export type ServiceToken = typeof TOKENS[keyof typeof TOKENS];

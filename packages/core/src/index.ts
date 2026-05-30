@@ -40,6 +40,9 @@ export { MetricsCollector } from './metrics/index.js';
 export type { MetricsSnapshot } from './metrics/index.js';
 export { toPrometheusText } from './metrics/index.js';
 
+export { MemoryStream, ReflectionEngine, SkillLibrary, LanguageAgentTreeSearch } from './cognitive/index.js';
+export type { MemoryEntry, MemoryType, MemoryStreamConfig, RetrievalScore, Reflection, Skill, SkillExecutionResult, TreeNode, LATSConfig } from './cognitive/index.js';
+
 /**
  * Checks whether any component of targetPath (relative to rootPath) is a symlink.
  * Walks from rootPath downward through each segment of the target.
