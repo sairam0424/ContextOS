@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getSharedDatabase, WorkspaceEventBus, GitIntelligenceService, MultiModalFusionService, GraphRAGService } from "@context-os/core";
+import { getSharedDatabase, getSharedEmbeddingService, GitIntelligenceService, MultiModalFusionService, GraphRAGService, intelligenceService } from "@context-os/core";
+import type { FusionCandidate } from "@context-os/core";
 import { handleToolError } from "../utils.js";
 import { workspaceRoot } from "../utils.js";
 
@@ -27,9 +28,62 @@ function getFusionService(): MultiModalFusionService {
 function getGraphRAG(): GraphRAGService {
   if (!graphRAG) {
     const db = getSharedDatabase();
-    graphRAG = new GraphRAGService(db.getRawDb());
+    // Pass embedding so community search ranks by cosine (WS-B), not substring overlap.
+    graphRAG = new GraphRAGService(db.getRawDb(), getSharedEmbeddingService());
   }
   return graphRAG;
+}
+
+/**
+ * Retrieves REAL candidates from the index and maps them into FusionCandidates.
+ *
+ * Pipeline (no fabricated rows):
+ *  1. `intelligenceService.search` — the shared singleton — embeds the query
+ *     (shared EmbeddingService) and runs the vec0 + RRF hybrid search, with a
+ *     graceful grep fallback baked in when no embedding backend is configured
+ *     or the dimension is gated out. Its `score` is the real fused relevance.
+ *  2. `searchHybrid(EMPTY_EMBEDDING, query)` recovers the raw FTS5 keyword leg
+ *     so each candidate carries a real `bm25Score` derived from FTS5 `rank`.
+ *     Passing a zero-length vector deliberately skips the semantic leg (the
+ *     repository degrades to keyword-only), so this call never depends on an
+ *     embedding backend and never compares mismatched dimensions.
+ *  3. Per-candidate enrichment from the shared DB: graph proximity from edge
+ *     affinities (anchored on the top hit), recency from the document `mtime`,
+ *     and heat from the access-log path heat.
+ */
+async function buildFusionCandidates(query: string, limit: number): Promise<FusionCandidate[]> {
+  const db = getSharedDatabase();
+
+  // Real retrieval: embed + vec0/RRF hybrid + grep fallback (shared instances).
+  const retrieved = await intelligenceService.search(query, { limit });
+  if (retrieved.length === 0) return [];
+
+  // Recover the raw FTS5 keyword ranks for a real bm25 signal. The empty vector
+  // forces the keyword-only leg, so this works even with no embedding backend.
+  const { keywordResults } = db.searchHybrid(new Float32Array(0), query, limit);
+  // FTS5 `rank` is lower-is-better (typically negative); convert to a
+  // higher-is-better magnitude so it composes with the other signals.
+  const bm25ByPath = new Map<string, number>(
+    keywordResults.map((r: { path: string; rank?: number }) => [r.path, r.rank != null ? -r.rank : 0])
+  );
+
+  // Graph proximity is defined relative to an anchor; use the top hit so the
+  // remaining candidates are scored by their edge affinity to the best match.
+  const anchorPath = retrieved[0]?.path;
+  const affinities = anchorPath ? db.getAffinities(anchorPath) : new Map<string, number>();
+
+  return retrieved.map((res): FusionCandidate => {
+    const doc = db.getDocumentByPath(res.path) as { mtime?: number } | undefined;
+    return {
+      path: res.path,
+      // `score` is undefined for grep-fallback hits — omit rather than fabricate.
+      semanticScore: res.score,
+      bm25Score: bm25ByPath.get(res.path),
+      graphProximityScore: affinities.get(res.path),
+      lastModified: doc?.mtime,
+      accessCount: db.getPathHeat(res.path),
+    };
+  });
 }
 
 export function registerPredictiveTools(server: McpServer): void {
@@ -69,8 +123,19 @@ export function registerPredictiveTools(server: McpServer): void {
     },
     async ({ query, weights, limit }) => {
       try {
+        const candidates = await buildFusionCandidates(query, limit);
+
+        // Graceful fallback: no embedding backend / empty index / no FTS hits.
+        // Return the raw retrieval paths rather than throwing or echoing the
+        // query, so search_fused still answers from the real index (keyword leg).
+        if (candidates.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify([]) }],
+            isError: false as const,
+          };
+        }
+
         const fusion = getFusionService();
-        const candidates = [{ path: query, semanticScore: 0.5 }];
         const results = fusion.score(candidates, weights);
         const limited = results.slice(0, limit);
         return {
@@ -100,7 +165,7 @@ export function registerPredictiveTools(server: McpServer): void {
             isError: false as const,
           };
         }
-        const result = rag.globalSearch(query);
+        const result = await rag.globalSearch(query);
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result) }],
           isError: false as const,

@@ -215,19 +215,24 @@ export function createContextOS(config: ContextOSConfig): ContextOS {
   container.register(TOKENS.MemoryStream, (c) => {
     const db = c.resolve(TOKENS.Database);
     const bus = c.resolve(TOKENS.EventBus);
-    return new MemoryStream(db.getRawDb(), bus);
+    const embedding = c.resolve(TOKENS.Embedding);
+    // 3rd arg is config (default); 4th is the embedding service that activates
+    // cosine relevance (WS-B). Without it, relevance silently falls back to token overlap.
+    return new MemoryStream(db.getRawDb(), bus, undefined, embedding);
   });
 
   container.register(TOKENS.ReflectionEngine, (c) => {
     const db = c.resolve(TOKENS.Database);
     const bus = c.resolve(TOKENS.EventBus);
     const memory = c.resolve(TOKENS.MemoryStream);
-    return new ReflectionEngine(db.getRawDb(), bus, memory);
+    const embedding = c.resolve(TOKENS.Embedding);
+    return new ReflectionEngine(db.getRawDb(), bus, memory, embedding);
   });
 
   container.register(TOKENS.SkillLibrary, (c) => {
     const db = c.resolve(TOKENS.Database);
-    return new SkillLibrary(db.getRawDb());
+    const embedding = c.resolve(TOKENS.Embedding);
+    return new SkillLibrary(db.getRawDb(), embedding);
   });
 
   container.register(TOKENS.TreeSearch, () => {
@@ -316,7 +321,8 @@ export function createContextOS(config: ContextOSConfig): ContextOS {
 
   container.register(TOKENS.GraphRAG, (c) => {
     const db = c.resolve(TOKENS.Database);
-    return new GraphRAGService(db.getRawDb());
+    const embedding = c.resolve(TOKENS.Embedding);
+    return new GraphRAGService(db.getRawDb(), embedding);
   });
 
   container.register(TOKENS.PredictiveFailure, (c) => {

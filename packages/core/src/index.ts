@@ -76,6 +76,17 @@ export { MetricsCollector } from './metrics/index.js';
 export type { MetricsSnapshot } from './metrics/index.js';
 export { toPrometheusText } from './metrics/index.js';
 
+// ── Embedding ────────────────────────────────────────────────────────────────
+export { EmbeddingService } from './services/embedding.js';
+/**
+ * Shared embedding-service singleton. Pass into MemoryStream/ReflectionEngine/
+ * SkillLibrary/GraphRAGService to activate cosine relevance (WS-B); without it
+ * those components silently fall back to lexical token overlap.
+ * @deprecated Prefer `ctx.container.resolve(TOKENS.Embedding)`; scheduled for
+ * removal in v4 workstream WS-F alongside the other getShared* singletons.
+ */
+export { getSharedEmbeddingService } from './services/embedding.js';
+
 // ── Cognitive ────────────────────────────────────────────────────────────────
 export { MemoryStream, ReflectionEngine, SkillLibrary, LanguageAgentTreeSearch } from './cognitive/index.js';
 export type { MemoryEntry, MemoryType, MemoryStreamConfig, RetrievalScore, Reflection, Skill, SkillExecutionResult, TreeNode, LATSConfig } from './cognitive/index.js';

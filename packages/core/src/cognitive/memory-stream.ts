@@ -1,6 +1,14 @@
 import type { RawDB } from '../database/types.js';
 import type { WorkspaceEventBus } from '../events/event-bus.js';
+import type { EmbeddingService } from '../services/embedding.js';
 import type { MemoryEntry, MemoryType, MemoryStreamConfig } from './types.js';
+import {
+  CognitiveVectorStore,
+  embedRowInBackground,
+  resolveQueryVector,
+  relevanceScore,
+  tokenize,
+} from './similarity.js';
 
 const DEFAULT_CONFIG: MemoryStreamConfig = {
   recencyDecayLambda: 0.995,
@@ -61,35 +69,28 @@ function rowToMemoryEntry(row: RawMemoryRow): MemoryEntry {
   };
 }
 
-function tokenize(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .split(/\W+/)
-      .filter(word => word.length > 2)
-  );
-}
-
-function computeTextOverlap(queryTokens: Set<string>, contentTokens: Set<string>): number {
-  if (queryTokens.size === 0 || contentTokens.size === 0) return 0;
-  let sharedCount = 0;
-  for (const token of queryTokens) {
-    if (contentTokens.has(token)) sharedCount++;
-  }
-  const totalUniqueTokens = new Set([...queryTokens, ...contentTokens]).size;
-  return totalUniqueTokens === 0 ? 0 : sharedCount / totalUniqueTokens;
-}
+/** vec0 companion table holding one embedding per `memory_entries` row. */
+const MEMORY_VECTOR_TABLE = 'vec_memory_entries';
 
 export class MemoryStream {
   private readonly config: MemoryStreamConfig;
   private readonly db: RawDB;
   private readonly eventBus: WorkspaceEventBus;
+  private readonly embedding?: EmbeddingService;
+  private readonly vectors: CognitiveVectorStore;
   private readonly accumulatedImportance: Map<string, number> = new Map();
 
-  constructor(db: RawDB, eventBus: WorkspaceEventBus, config?: Partial<MemoryStreamConfig>) {
+  constructor(
+    db: RawDB,
+    eventBus: WorkspaceEventBus,
+    config?: Partial<MemoryStreamConfig>,
+    embedding?: EmbeddingService,
+  ) {
     this.db = db;
     this.eventBus = eventBus;
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.embedding = embedding;
+    this.vectors = new CognitiveVectorStore(db, MEMORY_VECTOR_TABLE);
   }
 
   observe(agentId: string, content: string, opts?: ObserveOptions): MemoryEntry {
@@ -98,6 +99,10 @@ export class MemoryStream {
     const importance = opts?.importance ?? this.scoreImportance(content);
 
     const result = this.db.prepare(SQL_INSERT_MEMORY).run(agentId, content, type, importance, now, now);
+
+    // Embed the content at write time (fire-and-forget): the row is returned
+    // immediately, its vector lands shortly after for cosine-based retrieval.
+    embedRowInBackground(this.embedding, this.vectors, Number(result.lastInsertRowid), content);
 
     const createdEntry: MemoryEntry = {
       id: Number(result.lastInsertRowid),
@@ -136,15 +141,26 @@ export class MemoryStream {
 
     const now = Date.now();
     const queryTokens = tokenize(query);
+    // Cosine query vector when the embedding backend is wired in AND this query
+    // is warm in the cache; otherwise undefined → token-overlap fallback. The
+    // 3-factor blend (recency x importance x relevance) is untouched — only the
+    // RELEVANCE term changes from Jaccard overlap to cosine. The dimension gate
+    // inside relevanceScore guards any cross-provider mismatch.
+    const queryVector = resolveQueryVector(this.embedding, 'memory', query);
 
     const scoredEntries: Array<{ readonly entry: MemoryEntry; readonly score: number }> = rows.map(row => {
       const entry = rowToMemoryEntry(row);
       const hoursSinceAccess = (now - entry.accessedAt) / 3600000;
       const recencyScore = Math.pow(this.config.recencyDecayLambda, hoursSinceAccess);
       const importanceScore = entry.importance * this.config.importanceWeight;
-      const contentTokens = tokenize(entry.content);
-      const relevanceScore = computeTextOverlap(queryTokens, contentTokens) * this.config.relevanceWeight;
-      const totalScore = recencyScore + importanceScore + relevanceScore;
+      const relevance = relevanceScore(
+        queryVector,
+        this.vectors.get(entry.id),
+        queryTokens,
+        entry.content,
+      );
+      const weightedRelevance = relevance * this.config.relevanceWeight;
+      const totalScore = recencyScore + importanceScore + weightedRelevance;
       return { entry, score: totalScore };
     });
 
@@ -194,6 +210,8 @@ export class MemoryStream {
     const now = Date.now();
 
     const result = this.db.prepare(SQL_INSERT_MEMORY).run(agentId, reflectionContent, 'reflection', 0.8, now, now);
+
+    embedRowInBackground(this.embedding, this.vectors, Number(result.lastInsertRowid), reflectionContent);
 
     this.eventBus.emit({
       type: 'memory.reflected' as any,

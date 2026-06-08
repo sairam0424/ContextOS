@@ -1,7 +1,23 @@
 import type { RawDB } from '../database/types.js';
 import type { WorkspaceEventBus } from '../events/event-bus.js';
+import type { EmbeddingService } from '../services/embedding.js';
 import type { Reflection } from './types.js';
 import type { MemoryStream } from './memory-stream.js';
+import {
+  CognitiveVectorStore,
+  embedRowInBackground,
+  resolveQueryVector,
+  relevanceScore,
+  tokenize,
+} from './similarity.js';
+
+/** vec0 companion table holding one embedding per `reflections` row. */
+const REFLECTION_VECTOR_TABLE = 'vec_reflections';
+
+/** The text a reflection is indexed/matched on: its observation + prescription. */
+function reflectionText(observation: string, prescription: string): string {
+  return `${observation} ${prescription}`;
+}
 
 interface ReflectOpts {
   readonly agentId: string;
@@ -42,11 +58,20 @@ export class ReflectionEngine {
   private readonly db: RawDB;
   private readonly eventBus: WorkspaceEventBus;
   private readonly memoryStream: MemoryStream;
+  private readonly embedding?: EmbeddingService;
+  private readonly vectors: CognitiveVectorStore;
 
-  constructor(db: RawDB, eventBus: WorkspaceEventBus, memoryStream: MemoryStream) {
+  constructor(
+    db: RawDB,
+    eventBus: WorkspaceEventBus,
+    memoryStream: MemoryStream,
+    embedding?: EmbeddingService,
+  ) {
     this.db = db;
     this.eventBus = eventBus;
     this.memoryStream = memoryStream;
+    this.embedding = embedding;
+    this.vectors = new CognitiveVectorStore(db, REFLECTION_VECTOR_TABLE);
   }
 
   reflect(opts: ReflectOpts): Reflection {
@@ -65,6 +90,15 @@ export class ReflectionEngine {
     );
 
     const id = Number(result.lastInsertRowid);
+
+    // Embed observation+prescription at write time so getRelevantReflections
+    // can rank by cosine; fire-and-forget, degrades to token overlap offline.
+    embedRowInBackground(
+      this.embedding,
+      this.vectors,
+      id,
+      reflectionText(opts.observation, opts.prescription),
+    );
 
     this.memoryStream.observe(opts.agentId, opts.prescription, {
       type: 'reflection',
@@ -103,11 +137,18 @@ export class ReflectionEngine {
     ).all(agentId) as ReflectionRow[];
     const reflections = rows.map(rowToReflection);
 
+    const queryTokens = tokenize(taskDescription);
+    // Cosine when warm + embedded; token overlap otherwise. Same gate as the
+    // memory stream — only the relevance signal changes.
+    const queryVector = resolveQueryVector(this.embedding, 'reflection', taskDescription);
+
     const scored = reflections.map(reflection => ({
       reflection,
-      score: this.textOverlap(
-        taskDescription,
-        `${reflection.observation} ${reflection.prescription}`
+      score: relevanceScore(
+        queryVector,
+        this.vectors.get(reflection.id),
+        queryTokens,
+        reflectionText(reflection.observation, reflection.prescription),
       ),
     }));
 
@@ -139,28 +180,5 @@ export class ReflectionEngine {
       .join('\n');
 
     return `Past learnings:\n${prescriptions}\n\nOriginal task: ${taskDescription}`;
-  }
-
-  private textOverlap(a: string, b: string): number {
-    const tokenize = (text: string): Set<string> => {
-      const words = text.toLowerCase().split(/\s+/);
-      return new Set(words.filter(word => word.length > 2));
-    };
-
-    const tokensA = tokenize(a);
-    const tokensB = tokenize(b);
-
-    if (tokensA.size === 0 || tokensB.size === 0) {
-      return 0;
-    }
-
-    let shared = 0;
-    for (const token of tokensA) {
-      if (tokensB.has(token)) {
-        shared++;
-      }
-    }
-
-    return shared / Math.max(tokensA.size, tokensB.size);
   }
 }

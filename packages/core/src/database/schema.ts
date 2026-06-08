@@ -154,6 +154,66 @@ const MIGRATIONS: readonly Migration[] = [
       db.exec(`CREATE INDEX IF NOT EXISTS idx_missions_status ON missions(status)`);
     },
   },
+  {
+    name: '009_vec0_virtual_table',
+    up(db) {
+      // Convert the legacy plain `vec_documents` (id, embedding BLOB, provider,
+      // dimension) into a sqlite-vec vec0 virtual table so semantic search uses a
+      // real KNN index instead of brute-force vec_distance_cosine scans.
+      //
+      // DESTRUCTIVE for derived vectors only: a table cannot be turned into a
+      // virtual table in place, so we DROP + recreate. No source data is lost —
+      // document content lives in `documents`; we requeue affected docs so the
+      // existing IntelligenceQueue re-embeds them into the new table.
+      //
+      // Idempotent: once `vec_documents` is already a vec0 virtual table this
+      // no-ops. Fresh databases created by initializeSchema() also no-op here
+      // because createCoreTables() already builds the vec0 form.
+      const masterRow = db
+        .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'vec_documents'`)
+        .get() as { sql: string | null } | undefined;
+
+      // No table at all (shouldn't happen post-init) — nothing to migrate.
+      if (!masterRow) return;
+
+      const ddl = (masterRow.sql ?? '').toUpperCase();
+      const isVirtual = ddl.includes('USING VEC0');
+
+      // Already the vec0 form — recorded as applied, no work to do.
+      if (isVirtual) return;
+
+      log.debug('Migrating vec_documents from plain table to vec0 virtual table');
+
+      // Capture which documents had a vector so we can requeue exactly them.
+      // (If the legacy table is empty this is a no-op set.)
+      const affected = db
+        .prepare(`SELECT id FROM vec_documents`)
+        .all() as Array<{ id: number }>;
+
+      db.exec(`DROP TABLE vec_documents`);
+      db.exec(`
+        CREATE VIRTUAL TABLE vec_documents USING vec0(
+          id INTEGER PRIMARY KEY,
+          dimension INTEGER partition key,
+          embedding float[384] distance_metric=cosine,
+          +model_id TEXT,
+          +provider TEXT
+        )
+      `);
+
+      // Reset affected documents to 'pending' and enqueue them so the existing
+      // IntelligenceQueue regenerates their (now dropped) vectors. INSERT OR
+      // IGNORE keeps it safe if a queue row already exists.
+      const setPending = db.prepare(`UPDATE documents SET intelligence_status = 'pending' WHERE id = ?`);
+      const enqueue = db.prepare(`INSERT OR IGNORE INTO intelligence_queue (doc_id, priority) VALUES (?, 1)`);
+      for (const { id } of affected) {
+        setPending.run(id);
+        enqueue.run(id);
+      }
+
+      log.debug({ requeued: affected.length }, 'vec0 migration complete — affected documents requeued for re-embedding');
+    },
+  },
 ];
 
 /**

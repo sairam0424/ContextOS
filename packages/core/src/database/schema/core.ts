@@ -1,3 +1,4 @@
+import * as sqliteVec from 'sqlite-vec';
 import type { RawDB } from '../types.js';
 
 /**
@@ -8,6 +9,12 @@ import type { RawDB } from '../types.js';
  * SQL is byte-identical to the original monolithic schema — moved, not rewritten.
  */
 export function createCoreTables(db: RawDB): void {
+  // vec_documents is a sqlite-vec vec0 virtual table, so the extension must be
+  // loaded before the CREATE below. The canonical createConnection() already
+  // loads it; this defensive (idempotent) load keeps schema init self-sufficient
+  // for connections built without it (e.g. a bare `new Database(':memory:')`).
+  sqliteVec.load(db);
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,12 +56,21 @@ export function createCoreTables(db: RawDB): void {
     END
   `);
 
+  // vec0 virtual table (sqlite-vec) — KNN-indexed instead of brute-force scans.
+  // `dimension` is a PARTITION KEY so cross-provider reads can be gated inside
+  // the KNN WHERE clause (vec0 forbids WHERE constraints on `+` aux columns, but
+  // allows them on partition keys). `embedding` is fixed at float[384]; the
+  // stored `dimension`/`model_id` let a 384-vs-768 mismatch SKIP rather than
+  // return garbage. distance_metric=cosine preserves the previous
+  // vec_distance_cosine semantics (0 = identical, 1 = orthogonal).
+  // Migration 009 (schema.ts) converts legacy plain-table installs to this form.
   db.exec(`
-    CREATE TABLE IF NOT EXISTS vec_documents (
+    CREATE VIRTUAL TABLE IF NOT EXISTS vec_documents USING vec0(
       id INTEGER PRIMARY KEY,
-      embedding BLOB,
-      provider TEXT,
-      dimension INTEGER NOT NULL DEFAULT 0
+      dimension INTEGER partition key,
+      embedding float[384] distance_metric=cosine,
+      +model_id TEXT,
+      +provider TEXT
     )
   `);
 
