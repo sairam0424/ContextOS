@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { handleToolError } from '../utils.js';
+import { handleToolError, sanitizeUntrustedContent } from '../utils.js';
 import { knowledgeGraphService, GraphNode, GraphEdge } from '@context-os/core';
 
 interface TraversalResult {
@@ -124,10 +124,11 @@ export function registerGraphQueryTool(server: McpServer): void {
           },
         };
 
+        // Node labels/metadata derive from indexed workspace content — quarantine.
         return {
           content: [{
             type: 'text' as const,
-            text: JSON.stringify(result, null, 2),
+            text: sanitizeUntrustedContent(JSON.stringify(result, null, 2), `graph:${startNode}`),
           }],
         };
       } catch (error: unknown) {

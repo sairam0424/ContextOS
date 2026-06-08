@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { intelligenceService } from "@context-os/core";
-import { handleToolError } from "../utils.js";
+import { handleToolError, sanitizeUntrustedContent, sanitizeInline } from "../utils.js";
 import { createProgressReporter } from "../progress.js";
 
 interface CursorPayload {
@@ -74,13 +74,19 @@ export function registerSearchTool(server: McpServer) {
           };
         }
 
+        // Per-result excerpt cap: search excerpts are snippets, not whole files.
+        const EXCERPT_CAP = 2_000;
         const formattedResults = results.map(res => {
           const typeTag = res.type === 'hybrid' ? '[Hybrid]' : '[Deep]';
           let output = `${typeTag} ${res.path}\n`;
           if (res.title && res.title !== 'Deep Scan Result') {
-            output += `Title: ${res.title} ${res.tags.length ? `[${res.tags.join(', ')}]` : ''}\n`;
+            // Title is derived from indexed file content — sanitize but keep inline.
+            const safeTitle = sanitizeInline(res.title);
+            const safeTags = res.tags.map(sanitizeInline);
+            output += `Title: ${safeTitle} ${safeTags.length ? `[${safeTags.join(', ')}]` : ''}\n`;
           }
-          output += `Excerpt: ${res.excerpt}\n`;
+          // Excerpt is raw indexed/retrieved content — quarantine as untrusted (OWASP LLM01).
+          output += `Excerpt:\n${sanitizeUntrustedContent(res.excerpt, res.path, EXCERPT_CAP)}\n`;
           output += `---`;
           return output;
         }).join('\n');

@@ -60,6 +60,27 @@ const DIMENSION_COLUMN_MAP: Record<TrustDimension, string> = {
   resourceEfficiency: 'resource_efficiency',
 };
 
+/**
+ * The complete set of physical column names that may ever be interpolated into
+ * a trust_scores UPDATE. SQL parameter binding cannot parameterize an
+ * identifier, so the dimension column name is the one value spliced into the
+ * query string — every such splice MUST be proven to come from this whitelist.
+ */
+const TRUST_SCORE_COLUMNS: ReadonlySet<string> = new Set(Object.values(DIMENSION_COLUMN_MAP));
+
+/**
+ * Provably closes the only non-parameterized path in this module: rejects any
+ * column name that is not a known trust_scores dimension column before it can
+ * reach query construction. Defends against a poisoned/extended map or an
+ * out-of-enum dimension reaching the SQL sink.
+ */
+function assertTrustScoreColumn(columnName: string): string {
+  if (!TRUST_SCORE_COLUMNS.has(columnName)) {
+    throw new Error(`Refusing to build trust_scores query with unknown column '${columnName}'`);
+  }
+  return columnName;
+}
+
 export class TrustEngine {
   private readonly db: RawDB;
   private readonly eventBus: WorkspaceEventBus;
@@ -83,7 +104,9 @@ export class TrustEngine {
     this.ensureScoreExists(agentId);
 
     const currentScore = this.getScoreRow(agentId)!;
-    const columnName = DIMENSION_COLUMN_MAP[dimension];
+    // Whitelist-guard the dimension column before it is interpolated into SQL:
+    // this is the only identifier spliced into a query string in this module.
+    const columnName = assertTrustScoreColumn(DIMENSION_COLUMN_MAP[dimension]);
     const oldValue = currentScore[columnName as keyof TrustScoreRow] as number;
     const newValue = oldValue * (1 - this.alpha) + target * this.alpha;
     const delta = newValue - oldValue;
@@ -157,8 +180,14 @@ export class TrustEngine {
   resetScore(agentId: string): void {
     this.ensureScoreExists(agentId);
     const now = Date.now();
+    // Build the per-dimension SET clause from the same whitelist used on the
+    // hot path so both reset and recordEvent share one provably-safe source of
+    // column identifiers (no second list to drift out of sync).
+    const dimensionSet = Object.values(DIMENSION_COLUMN_MAP)
+      .map(col => `${assertTrustScoreColumn(col)} = 0.5`)
+      .join(', ');
     this.db.prepare(
-      `UPDATE trust_scores SET reliability = 0.5, timeliness = 0.5, accuracy = 0.5, compliance = 0.5, resource_efficiency = 0.5, overall = 0.5, last_updated = ? WHERE agent_id = ?`
+      `UPDATE trust_scores SET ${dimensionSet}, overall = 0.5, last_updated = ? WHERE agent_id = ?`
     ).run(now, agentId);
   }
 

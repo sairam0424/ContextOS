@@ -25,6 +25,7 @@ import { registerPrompts } from "./prompts/index.js";
 import { setLoggingServer } from "./logging.js";
 import { subscriptionManager } from "./subscriptions.js";
 import { registerRoots } from "./roots.js";
+import { captureToolRegistrations, runToolIntegrityCheck } from "./tool-integrity.js";
 
 export async function createMcpServer(version: string): Promise<McpServer> {
   const server = new McpServer({
@@ -37,6 +38,11 @@ export async function createMcpServer(version: string): Promise<McpServer> {
 
   // Resource subscriptions
   subscriptionManager.setServer(server);
+
+  // Tool-definition hash pinning (OWASP MCP03 rug-pull): wrap `server.tool` to
+  // capture each registration's name/description/schema, then run boot-time
+  // drift detection after all tools are registered. Defense-in-depth only.
+  const { captured, restore } = captureToolRegistrations(server);
 
   // Tools
   registerReadTool(server);
@@ -60,6 +66,12 @@ export async function createMcpServer(version: string): Promise<McpServer> {
   registerGovernanceTools(server);
   registerIntelligenceStreamTools(server);
   registerPredictiveTools(server);
+
+  // Stop capturing and run boot-time tool-set drift detection. Restore the
+  // original `server.tool` first so resource/prompt registration is untouched,
+  // and so the check itself can never alter registration behavior.
+  restore();
+  runToolIntegrityCheck(captured);
 
   // Resources
   registerResources(server);

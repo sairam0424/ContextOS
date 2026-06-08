@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import fs from "fs/promises";
-import { validatePath, handleToolError } from "../utils.js";
+import { validatePath, handleToolError, sanitizeUntrustedContent } from "../utils.js";
 
 export function registerReadTool(server: McpServer) {
   server.tool(
@@ -14,8 +14,10 @@ export function registerReadTool(server: McpServer) {
       try {
         const { fullPath } = validatePath(`${scope}/${filePath}`);
         const data = await fs.readFile(fullPath, "utf-8");
+        // Quarantine: raw file bytes are untrusted input (OWASP LLM01).
+        const safe = sanitizeUntrustedContent(data, `${scope}/${filePath}`);
         return {
-          content: [{ type: "text" as const, text: data }],
+          content: [{ type: "text" as const, text: safe }],
           isError: false as const
         };
       } catch (error: any) {

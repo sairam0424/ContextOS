@@ -214,6 +214,26 @@ const MIGRATIONS: readonly Migration[] = [
       log.debug({ requeued: affected.length }, 'vec0 migration complete — affected documents requeued for re-embedding');
     },
   },
+  {
+    name: '010_capability_token_signature',
+    up(db) {
+      // v4 opportunity #12: capability tokens were stored unsigned, so anything
+      // with DB write access could mint or escalate a grant. Add an HMAC
+      // `signature` column (verified at authorize()) plus a `principal` column
+      // (the initiating human/root authority, distinct from the acting agent)
+      // to defeat confused-deputy abuse across delegation chains.
+      //
+      // Idempotent: column adds are guarded by hasColumn(). Legacy rows keep
+      // NULL signatures and are therefore rejected at authorize() until reissued
+      // — that is the intended fail-closed behavior for unsigned/forged rows.
+      if (!hasColumn(db, 'capability_tokens', 'signature')) {
+        db.exec(`ALTER TABLE capability_tokens ADD COLUMN signature TEXT`);
+      }
+      if (!hasColumn(db, 'capability_tokens', 'principal')) {
+        db.exec(`ALTER TABLE capability_tokens ADD COLUMN principal TEXT`);
+      }
+    },
+  },
 ];
 
 /**

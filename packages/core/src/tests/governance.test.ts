@@ -24,6 +24,14 @@ function emaStep(oldValue: number, target: number): number {
 describe('Governance', function () {
   this.timeout(10000);
 
+  // WS-D: CapabilityTokenService signs/verifies tokens with an HMAC keyed from
+  // CONTEXTOS_TOKEN_HMAC_KEY. The service already falls back to a fixed test key
+  // under the mocha runner, but we pin an explicit key here so the suite is
+  // deterministic regardless of how it is launched (NODE_ENV, direct node, etc.).
+  before(() => {
+    process.env.CONTEXTOS_TOKEN_HMAC_KEY = 'test-key';
+  });
+
   describe('TrustEngine', () => {
     let testDb: TestDB;
     let bus: WorkspaceEventBus;
@@ -221,18 +229,45 @@ describe('Governance', function () {
       );
     });
 
-    // WS-D INVERSION: authorize() currently trusts whatever capabilities JSON is in
-    // the DB row — no signature/HMAC verification. WS-D adds HMAC verification, after
-    // which a forged/unsigned row will be DENIED instead of authorized.
-    it('authorizes from an unsigned/forged DB row (no integrity check today)', () => {
+    // WS-D INVERSION (now flipped): authorize() previously trusted whatever
+    // capabilities JSON was in the DB row — no signature/HMAC verification. WS-D
+    // added HMAC verification, so a forged/unsigned row (NULL signature/principal
+    // after migration 010) is now DENIED. The denial result carries no tokenId.
+    it('DENIES an unsigned/forged DB row (HMAC verification rejects it)', () => {
       const now = Date.now();
       testDb.db.prepare(
         `INSERT INTO capability_tokens (id, agent_id, capabilities, issued_by, issued_at, expires_at, revoked, parent_token_id, max_delegation_depth)
          VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 0)`,
       ).run('forged', 'fk', JSON.stringify([{ resource: 'secrets:db', actions: ['write'] }]), 'attacker', now, now + 3_600_000);
       const r = service.authorize('fk', 'secrets:db', 'write');
-      assert.strictEqual(r.authorized, true); // WS-D will flip this to false
-      assert.strictEqual(r.tokenId, 'forged');
+      assert.strictEqual(r.authorized, false); // WS-D flipped this from true
+      assert.strictEqual(r.tokenId, undefined); // denial result has no tokenId
+    });
+
+    // WS-D positive test: a token issued through issue() is HMAC-signed, so it
+    // verifies and authorizes the happy path. This proves the hardening did not
+    // break legitimately-issued tokens.
+    it('authorizes a legitimately issued, HMAC-signed token', () => {
+      const token = service.issue({ agentId: 'signed', capabilities: [{ resource: 'secrets:db', actions: ['write'] }], issuedBy: 'root' });
+      const r = service.authorize('signed', 'secrets:db', 'write');
+      assert.strictEqual(r.authorized, true);
+      assert.strictEqual(r.tokenId, token.id);
+    });
+
+    // WS-D positive test: tampering with a signed row's stored capabilities (e.g.
+    // a DB-level privilege escalation) invalidates the HMAC, so the row no longer
+    // grants the smuggled-in capability.
+    it('rejects a signed token whose capabilities were tampered in the DB', () => {
+      const token = service.issue({ agentId: 'tamper', capabilities: [{ resource: 'docs:readme', actions: ['read'] }], issuedBy: 'root' });
+      // Sanity: the untampered token authorizes its real grant.
+      assert.strictEqual(service.authorize('tamper', 'docs:readme', 'read').authorized, true);
+      // Attacker rewrites the capabilities JSON to escalate to secrets:write,
+      // leaving the (now-stale) signature in place.
+      testDb.db.prepare('UPDATE capability_tokens SET capabilities = ? WHERE id = ?')
+        .run(JSON.stringify([{ resource: 'secrets:db', actions: ['write'] }]), token.id);
+      const r = service.authorize('tamper', 'secrets:db', 'write');
+      assert.strictEqual(r.authorized, false); // HMAC mismatch -> fail closed
+      assert.strictEqual(r.tokenId, undefined);
     });
   });
 
@@ -259,7 +294,10 @@ describe('Governance', function () {
     });
 
     it('denies when a matching deny rule fires', () => {
-      engine.addPolicy({ name: 'deny-secrets', rules: [{ condition: { type: 'resource_matches', pattern: '^secrets:' }, effect: 'deny' }] });
+      // WS-D: resource_matches now uses anchored glob/prefix matching (no regex,
+      // ReDoS-safe). The old '^secrets:' regex pattern no longer matches; use the
+      // glob 'secrets:*' so the deny rule fires and matchedPolicy stays 'deny-secrets'.
+      engine.addPolicy({ name: 'deny-secrets', rules: [{ condition: { type: 'resource_matches', pattern: 'secrets:*' }, effect: 'deny' }] });
       const d = engine.evaluate('x', 'secrets:db', 'write');
       assert.strictEqual(d.allowed, false);
       assert.strictEqual(d.effect, 'deny');
@@ -273,58 +311,104 @@ describe('Governance', function () {
       assert.strictEqual(d.allowed, false); // allowed true only when effect === 'allow'
     });
 
-    // WS-D INVERSION: with NO matching policy the engine currently DEFAULTS TO ALLOW.
-    // WS-D flips this to default-DENY (allowed:false, effect:'deny').
-    it('DEFAULTS TO ALLOW when no policy matches (current behavior)', () => {
+    // WS-D INVERSION (now flipped): with NO matching policy the engine now
+    // DEFAULTS TO DENY (fail-closed, Cedar/OPA-style). Absence of an explicit
+    // allow is a denial.
+    it('DEFAULTS TO DENY when no policy matches (fail-closed)', () => {
       const d = engine.evaluate('none', 'anything', 'read');
-      assert.strictEqual(d.allowed, true); // WS-D will flip to false
-      assert.strictEqual(d.effect, 'allow');
+      assert.strictEqual(d.allowed, false); // WS-D flipped this from true
+      assert.strictEqual(d.effect, 'deny');
       assert.strictEqual(d.matchedPolicy, null);
-      assert.strictEqual(d.reason, 'No policy matched');
+      assert.strictEqual(d.reason, "No policy matched — applying default effect 'deny'");
     });
 
-    it('honors priority ordering — higher priority policy wins', () => {
-      engine.addPolicy({ name: 'low-allow', rules: [{ condition: { type: 'resource_matches', pattern: '.*' }, effect: 'allow' }], priority: 1 });
-      engine.addPolicy({ name: 'high-deny', rules: [{ condition: { type: 'resource_matches', pattern: '.*' }, effect: 'deny' }], priority: 10 });
+    // WS-D positive test: an explicit allow policy permits the request that would
+    // otherwise be denied by default — proving default-deny does not break
+    // explicitly-authorized actions.
+    it('an explicit allow policy permits a request that default-deny would block', () => {
+      // Baseline: with no policy, the request is denied by default.
+      assert.strictEqual(engine.evaluate('exp', 'docs:readme', 'read').allowed, false);
+      engine.addPolicy({ name: 'allow-docs', rules: [{ condition: { type: 'resource_matches', pattern: 'docs:*' }, effect: 'allow' }] });
+      const d = engine.evaluate('exp', 'docs:readme', 'read');
+      assert.strictEqual(d.allowed, true);
+      assert.strictEqual(d.effect, 'allow');
+      assert.strictEqual(d.matchedPolicy, 'allow-docs');
+      // A resource outside the explicit allow still falls through to default-deny.
+      assert.strictEqual(engine.evaluate('exp', 'secrets:db', 'read').allowed, false);
+    });
+
+    it('resolves allow-vs-deny conflicts with deny-overrides (deny wins)', () => {
+      // WS-D: resource_matches uses glob matching now — '*' is the match-all
+      // pattern (the old regex '.*' would be treated as a literal exact match and
+      // never fire). With both an allow and a deny matching, forbid-overrides
+      // (Cedar/OPA) makes the deny win regardless of priority.
+      engine.addPolicy({ name: 'low-allow', rules: [{ condition: { type: 'resource_matches', pattern: '*' }, effect: 'allow' }], priority: 1 });
+      engine.addPolicy({ name: 'high-deny', rules: [{ condition: { type: 'resource_matches', pattern: '*' }, effect: 'deny' }], priority: 10 });
       const d = engine.evaluate('prio', 'docs:x', 'read');
       assert.strictEqual(d.matchedPolicy, 'high-deny');
       assert.strictEqual(d.allowed, false);
     });
 
-    it('evaluates resource_matches via regex test', () => {
-      engine.addPolicy({ name: 'deny-tmp', rules: [{ condition: { type: 'resource_matches', pattern: 'tmp' }, effect: 'deny' }] });
-      assert.strictEqual(engine.evaluate('a', 'cache:tmp:1', 'read').allowed, false); // substring matches
-      assert.strictEqual(engine.evaluate('a', 'cache:perm:1', 'read').allowed, true); // no match -> default allow
+    it('evaluates resource_matches via anchored glob (prefix wildcard + default-deny)', () => {
+      // WS-D: resource_matches is now anchored glob matching, NOT substring regex
+      // (ReDoS-safe). 'cache:*' matches resources under the cache: prefix and
+      // denies them; anything else falls through to the fail-closed default-deny.
+      engine.addPolicy({ name: 'deny-cache', rules: [{ condition: { type: 'resource_matches', pattern: 'cache:*' }, effect: 'deny' }] });
+      // Also add an explicit allow for a sibling prefix so we can prove a NON-cache
+      // resource is allowed by an explicit rule (not merely by the old default-allow).
+      engine.addPolicy({ name: 'allow-docs', rules: [{ condition: { type: 'resource_matches', pattern: 'docs:*' }, effect: 'allow' }] });
+      assert.strictEqual(engine.evaluate('a', 'cache:tmp:1', 'read').allowed, false); // prefix glob matches -> deny
+      assert.strictEqual(engine.evaluate('a', 'docs:guide', 'read').allowed, true); // explicit allow
+      assert.strictEqual(engine.evaluate('a', 'other:perm:1', 'read').allowed, false); // no match -> default-deny
     });
 
     it('evaluates a compound AND condition (both must hold)', () => {
+      // WS-D: inner resource_matches uses glob 'secrets:*' (not regex '^secrets:').
       engine.addPolicy({
         name: 'deny-write-secrets',
         rules: [{
           condition: {
             type: 'compound', operator: 'AND',
-            conditions: [{ type: 'resource_matches', pattern: '^secrets:' }, { type: 'action_type', action: 'write' }],
+            conditions: [{ type: 'resource_matches', pattern: 'secrets:*' }, { type: 'action_type', action: 'write' }],
           },
           effect: 'deny',
         }],
       });
-      assert.strictEqual(engine.evaluate('a', 'secrets:db', 'write').allowed, false); // both hold -> deny
-      assert.strictEqual(engine.evaluate('a', 'secrets:db', 'read').allowed, true); // action differs -> AND fails -> allow
+      const denied = engine.evaluate('a', 'secrets:db', 'write');
+      assert.strictEqual(denied.allowed, false); // both hold -> deny
+      assert.strictEqual(denied.matchedPolicy, 'deny-write-secrets');
+      // action differs -> AND fails -> no rule matches -> fail-closed default-deny
+      // (matchedPolicy null, NOT the deny-write-secrets policy).
+      const fallthrough = engine.evaluate('a', 'secrets:db', 'read');
+      assert.strictEqual(fallthrough.allowed, false);
+      assert.strictEqual(fallthrough.matchedPolicy, null);
     });
 
     it('evaluates a trust_below condition against the TrustEngine', () => {
-      // fresh agent seeds at overall 0.5
+      // fresh agent seeds at overall 0.5.
+      // WS-D: default is now fail-closed deny, so to prove the trust_below deny
+      // rule does NOT fire (0.5 not below 0.4) we add an explicit allow that the
+      // request can fall back to. This isolates trust_below from the default.
+      engine.addPolicy({ name: 'allow-all', rules: [{ condition: { type: 'resource_matches', pattern: '*' }, effect: 'allow' }] });
       engine.addPolicy({ name: 'deny-below-0.4', rules: [{ condition: { type: 'trust_below', threshold: 0.4 }, effect: 'deny' }] });
-      assert.strictEqual(engine.evaluate('tr', 'r', 'read').allowed, true); // 0.5 not below 0.4
+      assert.strictEqual(engine.evaluate('tr', 'r', 'read').allowed, true); // 0.5 not below 0.4 -> deny rule silent -> explicit allow wins
+      // 0.5 < 0.6 -> deny rule fires; deny-overrides beats the explicit allow.
       engine.addPolicy({ name: 'deny-below-0.6', rules: [{ condition: { type: 'trust_below', threshold: 0.6 }, effect: 'deny' }], priority: 5 });
       assert.strictEqual(engine.evaluate('tr', 'r', 'read').allowed, false); // 0.5 < 0.6 -> deny
     });
 
     it('ignores disabled policies', () => {
-      const p = engine.addPolicy({ name: 'deny-all', rules: [{ condition: { type: 'resource_matches', pattern: '.*' }, effect: 'deny' }] });
+      // WS-D: '*' is the glob match-all (old regex '.*' would be a literal exact
+      // match and never fire). Once disabled, the deny no longer fires; with no
+      // other policy the request falls through to the fail-closed default-deny.
+      const p = engine.addPolicy({ name: 'deny-all', rules: [{ condition: { type: 'resource_matches', pattern: '*' }, effect: 'deny' }] });
       assert.strictEqual(engine.evaluate('a', 'x', 'read').allowed, false);
       engine.disablePolicy(p.id);
-      assert.strictEqual(engine.evaluate('a', 'x', 'read').allowed, true); // disabled -> default allow
+      assert.strictEqual(engine.evaluate('a', 'x', 'read').allowed, false); // disabled deny -> no match -> default-deny
+      // Prove the disable actually took effect (not just coincidental default-deny):
+      // an explicit allow now governs, which it would not if deny-all were still active.
+      engine.addPolicy({ name: 'allow-x', rules: [{ condition: { type: 'resource_matches', pattern: '*' }, effect: 'allow' }] });
+      assert.strictEqual(engine.evaluate('a', 'x', 'read').allowed, true);
     });
   });
 
@@ -367,16 +451,57 @@ describe('Governance', function () {
       assert.strictEqual(persisted[0].id, alert!.id);
     });
 
-    it('detectAll only returns rate_spike alerts today (other detectors unimplemented)', () => {
-      // behavior_drift / unauthorized_access / resource_abuse are not implemented.
-      for (let i = 0; i < 8; i++) detector.recordAction('drift');
+    it('detectAll returns rate_spike AND behavior_drift; unauthorized_access/resource_abuse remain unimplemented', () => {
+      // WS-D: behavior_drift IS now implemented (Jensen-Shannon divergence vs a
+      // frozen admission baseline). unauthorized_access and resource_abuse are
+      // still unimplemented.
+      // Freeze a baseline that expects only 'read', then drive purely off-baseline
+      // 'write' calls: the live distribution is fully disjoint from the baseline,
+      // so JS divergence == 1.0 (>> 0.25 threshold) and drift fires. The >= 8
+      // rapid calls also satisfy MIN_DRIFT_OBSERVATIONS and trip the rate spike.
+      detector.registerBaseline('drift', { read: 10 });
+      for (let i = 0; i < 8; i++) detector.recordAction('drift', 'write');
       const all = detector.detectAll('drift');
-      assert.strictEqual(all.length, 1);
-      assert.strictEqual(all[0].type, 'rate_spike');
       const types = new Set(all.map(a => a.type));
-      assert.strictEqual(types.has('behavior_drift'), false);
+      assert.ok(all.length >= 2);
+      assert.strictEqual(types.has('rate_spike'), true);
+      assert.strictEqual(types.has('behavior_drift'), true);
       assert.strictEqual(types.has('unauthorized_access'), false);
       assert.strictEqual(types.has('resource_abuse'), false);
+    });
+
+    // WS-D positive test: the frozen-baseline drift detector fires on a divergent
+    // tool-usage sequence and stays silent on an on-baseline one.
+    it('detectBehaviorDrift fires on a divergent sequence against a frozen baseline', () => {
+      const alerts: string[] = [];
+      bus.on('governance.anomaly_detected' as any, (e: any) => alerts.push(e.alertId));
+
+      // Agent admitted expecting a read-heavy mix.
+      detector.registerBaseline('agent-drift', { read: 8, write: 2 });
+
+      // On-baseline behavior: no drift while observations are below the minimum
+      // AND while the distribution is consistent with the frozen reference.
+      for (let i = 0; i < 4; i++) detector.recordAction('agent-drift', 'read');
+      assert.strictEqual(detector.detectBehaviorDrift('agent-drift'), null); // < MIN_DRIFT_OBSERVATIONS
+
+      // Now flood with an off-baseline tool (delete) the agent never used at
+      // admission — the live mix diverges sharply from the frozen baseline.
+      for (let i = 0; i < 12; i++) detector.recordAction('agent-drift', 'delete');
+      const drift = detector.detectBehaviorDrift('agent-drift');
+      assert.ok(drift, 'expected a behavior_drift alert');
+      assert.strictEqual(drift!.type, 'behavior_drift');
+      assert.strictEqual(drift!.agentId, 'agent-drift');
+      assert.ok((drift!.evidence as any).divergence > 0.25);
+      assert.ok(alerts.includes(drift!.id)); // event bus emitted
+      // Persisted for audit.
+      const persisted = detector.getAlerts('agent-drift').filter(a => a.type === 'behavior_drift');
+      assert.strictEqual(persisted.length, 1);
+    });
+
+    it('detectBehaviorDrift returns null when no baseline is registered', () => {
+      // No frozen baseline => nothing to diverge from => no false positives.
+      for (let i = 0; i < 10; i++) detector.recordAction('no-baseline', 'write');
+      assert.strictEqual(detector.detectBehaviorDrift('no-baseline'), null);
     });
 
     it('reports the current per-minute rate via getAgentRate', () => {
