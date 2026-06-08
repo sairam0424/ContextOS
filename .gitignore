@@ -14,8 +14,15 @@ npm_cache/
 
 prompts/
 
-\n# ContextOS Data Warehouse\n.context-db/
-
+# ContextOS Data Warehouse
 .context-db/
 
-error-logs.md 
+# SQLite databases and test-DB artifacts (never commit)
+.context.db
+.context-db-test-*/
+*.db
+*.db-wal
+*.db-shm
+
+error-logs.md
+scratch-pad/

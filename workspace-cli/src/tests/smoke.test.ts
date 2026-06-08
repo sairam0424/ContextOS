@@ -4,7 +4,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from 'node:url';
 
-describe("CLI Experience Layer (Smoke Tests)", () => {
+describe("CLI Experience Layer (Smoke Tests)", function () {
+    // Each test shells out to a full CLI process via execSync; a real workspace
+    // `sync` indexes the whole repo and routinely runs 2-3s, exceeding mocha's
+    // 2000ms default. Give the subprocess-driven smoke suite generous headroom.
+    this.timeout(30000);
+
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     const cliPath = path.resolve(__dirname, "..", "index.js");
