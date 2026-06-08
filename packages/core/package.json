@@ -30,7 +30,7 @@
   "scripts": {
     "build": "tsc",
     "test": "mocha dist/tests/**/*.test.js",
-    "test:coverage": "c8 --reporter=text --reporter=lcov mocha dist/tests/**/*.test.js",
+    "test:coverage": "c8 mocha dist/tests/**/*.test.js",
     "validate": "exit 0"
   },
   "dependencies": {
@@ -41,9 +41,8 @@
     "chokidar": "^4.0.3",
     "front-matter": "^4.0.2",
     "fs-extra": "^11.2.0",
-    "js-yaml": "^3.14.2",
     "pino": "^10.3.1",
-    "sqlite-vec": "^0.1.9",
+    "sqlite-vec": "~0.1.9",
     "tree-sitter": "^0.21.1",
     "tree-sitter-python": "^0.25.0",
     "tree-sitter-typescript": "^0.23.2"

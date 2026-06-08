@@ -57,7 +57,11 @@ jobs:
       - run: npm run sync:assets
       - run: npm run build
 
-      - name: Run core coverage
+      # Coverage GATE: test:coverage runs c8 with check-coverage enabled
+      # (packages/core/.c8rc.json) and a standalone `c8 check-coverage`.
+      # A non-zero c8 exit (coverage below threshold) MUST fail this job.
+      # Do NOT add continue-on-error here.
+      - name: Run core coverage (enforced gate)
         run: cd packages/core && npm run test:coverage
 
       - name: Run dashboard coverage
@@ -65,6 +69,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload core coverage artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-core

@@ -9,7 +9,15 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["mocha", "node"]
+    "types": [
+      "mocha",
+      "node"
+    ],
+    "incremental": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "sourceMap": true
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }
