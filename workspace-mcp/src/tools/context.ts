@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import fs from "fs/promises";
 import path from "path";
-import { validatePath, handleToolError } from "../utils.js";
+import { validatePath, handleToolError, sanitizeUntrustedContent } from "../utils.js";
 
 export function registerContextTool(server: McpServer) {
   server.tool(
@@ -20,7 +20,10 @@ export function registerContextTool(server: McpServer) {
           const filePath = path.join(projectDir, file);
           try {
             const data = await fs.readFile(filePath, "utf-8");
-            content += `## ${file}\n\n${data}\n---\n\n`;
+            // memory.md is agent-writable (workspace_memory_update), so this is a
+            // live indirect-injection channel — quarantine like read/search.
+            const safe = sanitizeUntrustedContent(data, `projects/${project}/${file}`);
+            content += `## ${file}\n\n${safe}\n---\n\n`;
           } catch (fileError) {
             content += `## ${file}\n\n(File not found)\n---\n\n`;
           }

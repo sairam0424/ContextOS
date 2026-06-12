@@ -1,8 +1,27 @@
+/**
+ * @context-os/core — public API barrel.
+ *
+ * BLESSED ENTRY POINT: new code should bootstrap the platform via the factory
+ * and resolve services from the DI container:
+ *
+ *   import { createContextOS, TOKENS } from '@context-os/core';
+ *   const ctx = createContextOS({ workspaceRoot });
+ *   const service = ctx.container.resolve(TOKENS.X);
+ *
+ * Bare singleton imports and `createDefaultContainer` are DEPRECATED. They are
+ * retained for backward compatibility and will be removed in a later v4
+ * workstream (WS-F); do NOT reach for them in new code.
+ *
+ * Exports below are grouped by stability section. Every export in this barrel
+ * is part of the public surface — adding/removing one is a breaking change.
+ */
+
 import path from 'node:path';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { workspaceRoot, ALLOWED_BUCKETS } from './context.js';
 
+// ── Services (context, indexing, intelligence, validation, persistence) ──────
 export * from './context.js';
 export * from './indexer.js';
 export * from './services/intelligence.js';
@@ -19,36 +38,67 @@ export * from './services/mission.js';
 export * from './services/federation.js';
 export * from './validation.js';
 
-export { ServiceContainer, TOKENS } from './container/index.js';
+// ── DI & lifecycle ───────────────────────────────────────────────────────────
+export { ServiceContainer } from './container/index.js';
+/**
+ * Service-resolution tokens. Resolve via `container.resolve(TOKENS.X)`; do NOT
+ * mix token-based resolution with deprecated bare singleton imports.
+ */
+export { TOKENS } from './container/index.js';
 export type { ServiceToken, Token } from './container/index.js';
+/**
+ * @deprecated Use `createContextOS({ workspaceRoot })` and resolve services from
+ * `ctx.container` instead. Retained for backward compatibility; scheduled for
+ * removal in v4 workstream WS-F.
+ */
 export { createDefaultContainer } from './container/index.js';
 export { createContextOS } from './factory.js';
 export type { ContextOS, ContextOSConfig } from './factory.js';
+
+// ── Events ───────────────────────────────────────────────────────────────────
 export { WorkspaceEventBus, EventStore } from './events/index.js';
 export type { WorkspaceEvent, EventType, EventPayload, EventHandler } from './events/index.js';
 
+// ── Agents ───────────────────────────────────────────────────────────────────
 export { AgentRegistry, MessageBus } from './agents/index.js';
 export type { AgentRecord, RegisterOpts, AgentMessage, SendMessageOpts, AgentStatus } from './agents/index.js';
 
+// ── Orchestration ────────────────────────────────────────────────────────────
 export { TaskGraph, TaskScheduler, ConflictResolver, SwarmOrchestrator, NegotiationService, ConsensusService } from './orchestration/index.js';
 export type { TaskNode, TaskStatus, CreateTaskOpts, MissionProgress, LockRequest, RetryConfig, TopologyMode, SwarmStatus, SwarmConfig, SwarmSession, TaskLedger, ProgressLedger, TickResult, Proposal, ProposalStatus, VoteRequest, Vote, ConsensusResult } from './orchestration/index.js';
 
+// ── Resilience ───────────────────────────────────────────────────────────────
 export { CircuitBreaker, AuditLog } from './resilience/index.js';
 export type { CircuitBreakerConfig, AuditEntry } from './resilience/index.js';
 
+// ── Metrics ──────────────────────────────────────────────────────────────────
 export { MetricsCollector } from './metrics/index.js';
 export type { MetricsSnapshot } from './metrics/index.js';
 export { toPrometheusText } from './metrics/index.js';
 
+// ── Embedding ────────────────────────────────────────────────────────────────
+export { EmbeddingService } from './services/embedding.js';
+/**
+ * Shared embedding-service singleton. Pass into MemoryStream/ReflectionEngine/
+ * SkillLibrary/GraphRAGService to activate cosine relevance (WS-B); without it
+ * those components silently fall back to lexical token overlap.
+ * @deprecated Prefer `ctx.container.resolve(TOKENS.Embedding)`; scheduled for
+ * removal in v4 workstream WS-F alongside the other getShared* singletons.
+ */
+export { getSharedEmbeddingService } from './services/embedding.js';
+
+// ── Cognitive ────────────────────────────────────────────────────────────────
 export { MemoryStream, ReflectionEngine, SkillLibrary, LanguageAgentTreeSearch } from './cognitive/index.js';
 export type { MemoryEntry, MemoryType, MemoryStreamConfig, RetrievalScore, Reflection, Skill, SkillExecutionResult, TreeNode, LATSConfig } from './cognitive/index.js';
 
 export { TemporalGraphService } from './services/temporal-graph.js';
 export type { TemporalEdge, TemporalQuery, NodeMetric, NodeEvent, Hyperedge, ImpactResult } from './services/temporal-graph.js';
 
+// ── Governance ───────────────────────────────────────────────────────────────
 export { CapabilityTokenService, TrustEngine, PolicyEngine, AnomalyDetector } from './governance/index.js';
 export type { CapabilityGrant, CapabilityToken, AuthorizationResult, TrustDimension, TrustScore, TrustEvent, PolicyEffect, PolicyCondition, PolicyRule, Policy, PolicyDecision, AnomalySeverity, AnomalyType, AnomalyAlert } from './governance/index.js';
 
+// ── Streaming ────────────────────────────────────────────────────────────────
 export { EventProcessor, PredictiveHealthMonitor, KnowledgeDistiller, HierarchicalMemory } from './streaming/index.js';
 export type { PatternType, PatternAction, BurstConfig, SequenceConfig, AbsenceConfig, PatternRule, PatternMatch, HealthState, HealthPrediction, ServiceSignal, DistilledKnowledge, DistillationResult, MemoryLevel, MemorySummary, CompactionConfig, CompactionResult } from './streaming/index.js';
 
@@ -89,8 +139,18 @@ function containsSymlink(targetPath: string, rootPath: string): boolean {
   return false;
 }
 
+// ── Workspace utilities (path-safety guards) ─────────────────────────────────
+// SECURITY: validatePath() and isReadOnly() MUST be called before any file
+// access. validatePath() rejects paths outside the workspace root, outside an
+// allowed bucket, or routed through symlinks; isReadOnly() blocks writes to
+// read-only buckets. Skipping these guards before reading/writing is a security
+// defect.
+
 /**
  * Validates that a path is within the workspace root and inside an allowed bucket.
+ *
+ * MUST be called before any file access — it is the path-safety gate for all
+ * file reads/writes (rejects traversal, out-of-bucket, and symlink-routed paths).
  */
 export function validatePath(requestedPath: string) {
   const resolvedPath = path.resolve(workspaceRoot, requestedPath);
@@ -142,6 +202,9 @@ export function validatePath(requestedPath: string) {
 
 /**
  * Checks if a path is in a read-only bucket for agents.
+ *
+ * MUST be called before any file write — callers are required to reject writes
+ * to read-only buckets. Internally runs validatePath() first.
  */
 export function isReadOnly(filePath: string): boolean {
   const { fullPath } = validatePath(filePath);

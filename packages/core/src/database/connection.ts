@@ -3,10 +3,21 @@ import * as sqliteVec from 'sqlite-vec';
 import fs from 'fs-extra';
 import path from 'path';
 import { createChildLogger } from '../logger.js';
+import { instrumentConnection } from './query-metrics.js';
+import type { MetricsCollector } from '../metrics/collector.js';
 
 const log = createChildLogger('database:connection');
 
-export function createConnection(dbPath: string): Database.Database {
+export interface ConnectionOptions {
+  /**
+   * When provided, query latency is recorded into this collector and slow
+   * queries are logged. Omit it (the default) for zero instrumentation
+   * overhead on the hot path.
+   */
+  metrics?: MetricsCollector;
+}
+
+export function createConnection(dbPath: string, options: ConnectionOptions = {}): Database.Database {
   const dbDir = path.dirname(dbPath);
   fs.ensureDirSync(dbDir);
 
@@ -22,5 +33,8 @@ export function createConnection(dbPath: string): Database.Database {
   db.pragma('temp_store = MEMORY');
 
   log.debug({ dbPath }, 'Database connection opened');
-  return db;
+
+  // Off-by-default-safe: only wrap when a collector is supplied so the
+  // uninstrumented path keeps the raw better-sqlite3 connection untouched.
+  return options.metrics ? instrumentConnection(db, options.metrics) : db;
 }

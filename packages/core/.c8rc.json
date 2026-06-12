@@ -1,0 +1,19 @@
+{
+  "all": true,
+  "src": ["dist"],
+  "include": ["dist/**/*.js"],
+  "exclude": [
+    "dist/tests/**",
+    "dist/scratch/**",
+    "**/*.test.js",
+    "**/index.js"
+  ],
+  "excludeNodeModules": true,
+  "reporter": ["text", "lcov"],
+  "report-dir": "coverage",
+  "check-coverage": true,
+  "lines": 70,
+  "statements": 70,
+  "functions": 64,
+  "branches": 80
+}

@@ -1,5 +1,21 @@
 import type { RawDB } from '../database/types.js';
+import type { EmbeddingService } from '../services/embedding.js';
 import type { Skill, SkillExecutionResult } from './types.js';
+import {
+  CognitiveVectorStore,
+  embedRowInBackground,
+  resolveQueryVector,
+  relevanceScore,
+  tokenize,
+} from './similarity.js';
+
+/** vec0 companion table holding one embedding per `skills` row. */
+const SKILL_VECTOR_TABLE = 'vec_skills';
+
+/** The text a skill is indexed/matched on: its name + description. */
+function skillText(name: string, description: string): string {
+  return `${name} ${description}`;
+}
 
 interface SkillRow {
   id: number;
@@ -37,20 +53,14 @@ function rowToSkill(row: SkillRow): Skill {
   };
 }
 
-function computeTextOverlap(query: string, text: string): number {
-  const queryTokens = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const textLower = text.toLowerCase();
-  let matchCount = 0;
-  for (const token of queryTokens) {
-    if (textLower.includes(token)) {
-      matchCount++;
-    }
-  }
-  return queryTokens.length > 0 ? matchCount / queryTokens.length : 0;
-}
-
 export class SkillLibrary {
-  constructor(private readonly db: RawDB) {}
+  private readonly embedding?: EmbeddingService;
+  private readonly vectors: CognitiveVectorStore;
+
+  constructor(private readonly db: RawDB, embedding?: EmbeddingService) {
+    this.embedding = embedding;
+    this.vectors = new CognitiveVectorStore(db, SKILL_VECTOR_TABLE);
+  }
 
   store(opts: StoreOptions): Skill {
     const now = Date.now();
@@ -67,14 +77,30 @@ export class SkillLibrary {
       ).run(opts.name, opts.description, opts.code, prerequisites, now, opts.createdBy);
     }
 
-    return rowToSkill(this.db.prepare('SELECT * FROM skills WHERE name = ?').get(opts.name) as SkillRow);
+    const stored = rowToSkill(this.db.prepare('SELECT * FROM skills WHERE name = ?').get(opts.name) as SkillRow);
+
+    // Embed name+description at write time so search() can rank by cosine;
+    // fire-and-forget, degrades to token overlap when the backend is offline.
+    embedRowInBackground(this.embedding, this.vectors, stored.id, skillText(opts.name, opts.description));
+
+    return stored;
   }
 
   search(query: string, limit: number = 5): Skill[] {
     const rows = this.db.prepare('SELECT * FROM skills').all() as SkillRow[];
 
+    const queryTokens = tokenize(query);
+    // Cosine when warm + embedded; token overlap otherwise. Only the relevance
+    // term changes — the `+ successRate * 0.3` reliability blend is preserved.
+    const queryVector = resolveQueryVector(this.embedding, 'skill', query);
+
     const scored = rows.map((row) => {
-      const textScore = computeTextOverlap(query, row.name + ' ' + row.description);
+      const textScore = relevanceScore(
+        queryVector,
+        this.vectors.get(row.id),
+        queryTokens,
+        skillText(row.name, row.description),
+      );
       const successRate = row.success_count / (row.success_count + row.failure_count + 1);
       const combinedScore = textScore + successRate * 0.3;
       return { row, score: combinedScore };

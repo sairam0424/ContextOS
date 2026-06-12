@@ -1,0 +1,50 @@
+name: Bundle Analysis
+
+on:
+  pull_request:
+    paths:
+      - 'workspace-dashboard/**'
+      - 'package-lock.json'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build dashboard
+        run: cd workspace-dashboard && npx vite build
+
+      - name: Measure bundle size
+        id: size
+        run: |
+          JS_SIZE=$(find workspace-dashboard/dist/assets -name "*.js" -exec wc -c {} + 2>/dev/null | tail -1 | awk '{print $1}')
+          CSS_SIZE=$(find workspace-dashboard/dist/assets -name "*.css" -exec wc -c {} + 2>/dev/null | tail -1 | awk '{print $1}')
+          JS_KB=$(echo "scale=1; ${JS_SIZE:-0} / 1024" | bc)
+          CSS_KB=$(echo "scale=1; ${CSS_SIZE:-0} / 1024" | bc)
+          TOTAL_KB=$(echo "scale=1; (${JS_SIZE:-0} + ${CSS_SIZE:-0}) / 1024" | bc)
+          echo "js=${JS_KB}KB" >> "$GITHUB_OUTPUT"
+          echo "css=${CSS_KB}KB" >> "$GITHUB_OUTPUT"
+          echo "total=${TOTAL_KB}KB" >> "$GITHUB_OUTPUT"
+
+      - name: Comment bundle size
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: bundle-size
+          message: |
+            ## Bundle Size Report
+
+            | Asset | Size |
+            |-------|------|
+            | JavaScript | ${{ steps.size.outputs.js }} |
+            | CSS | ${{ steps.size.outputs.css }} |
+            | **Total** | **${{ steps.size.outputs.total }}** |

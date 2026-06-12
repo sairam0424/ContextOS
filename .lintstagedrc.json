@@ -1,3 +1,15 @@
 {
-  "*.{ts,tsx}": ["bash -c 'cd packages/core && npx tsc --noEmit --skipLibCheck -p tsconfig.json'"]
+  "packages/core/**/*.ts": [
+    "bash -c 'cd packages/core && npx tsc --noEmit --skipLibCheck -p tsconfig.json'"
+  ],
+  "workspace-cli/**/*.ts": [
+    "bash -c 'cd workspace-cli && npx tsc --noEmit --skipLibCheck -p tsconfig.json'"
+  ],
+  "workspace-mcp/**/*.ts": [
+    "bash -c 'cd workspace-mcp && npx tsc --noEmit --skipLibCheck -p tsconfig.json'"
+  ],
+  "workspace-dashboard/**/*.{ts,tsx}": [
+    "bash -c 'cd workspace-dashboard && npx eslint --max-warnings=0 .'",
+    "bash -c 'cd workspace-dashboard && npx tsc -b --noEmit'"
+  ]
 }

@@ -1,0 +1,25 @@
+core:
+  - changed-files:
+      - any-glob-to-any-file: "packages/core/**"
+
+cli:
+  - changed-files:
+      - any-glob-to-any-file: "workspace-cli/**"
+
+mcp:
+  - changed-files:
+      - any-glob-to-any-file: "workspace-mcp/**"
+
+dashboard:
+  - changed-files:
+      - any-glob-to-any-file: "workspace-dashboard/**"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/package.json"
+          - "package-lock.json"

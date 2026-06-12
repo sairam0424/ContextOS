@@ -12,6 +12,29 @@ import { createChildLogger } from './logger.js';
 
 const log = createChildLogger('indexer');
 
+/**
+ * Directories never descended into during a workspace scan. Indexing build
+ * artifacts and dependencies is never desired, is enormously slow, and exposes
+ * the tree-sitter parser to vendored files (e.g. 200KB+ `.d.ts`) that exceed
+ * its single-parse byte limit.
+ */
+const IGNORED_DIRS = new Set([
+    'node_modules',
+    'dist',
+    'build',
+    '.git',
+    '.context-db',
+    'coverage',
+    '.turbo',
+]);
+
+/**
+ * tree-sitter's native binding rejects a single `parse()` call above ~32KB with
+ * an opaque "Invalid argument". Source files this large are almost always
+ * generated/vendored; skip symbol extraction rather than abort the whole scan.
+ */
+const MAX_PARSE_BYTES = 30_000;
+
 export interface IndexRecord {
     path: string;
     title: string;
@@ -64,6 +87,9 @@ export class ContextIndexer {
             const fullPath = path.join(dir, entry.name);
             
             if (entry.isDirectory()) {
+                if (IGNORED_DIRS.has(entry.name)) {
+                    continue;
+                }
                 await this.scanDirectory(fullPath, existingRecordMap);
                 continue;
             }
@@ -154,6 +180,14 @@ export class ContextIndexer {
         this.dbService.removeSymbolsForPath(relativePath);
 
         const content = await fs.readFile(filePath, 'utf8');
+
+        // tree-sitter's native parse() throws "Invalid argument" past ~32KB.
+        // Files this large are generated/vendored; skip rather than abort the scan.
+        if (Buffer.byteLength(content, 'utf8') > MAX_PARSE_BYTES) {
+            log.debug({ path: relativePath, bytes: Buffer.byteLength(content, 'utf8') }, 'Skipping oversized file for symbol extraction');
+            return;
+        }
+
         const parser = new Parser();
         const lines = content.split('\n');
         
@@ -167,7 +201,7 @@ export class ContextIndexer {
                 (export_statement
                     [
                         (function_declaration name: (identifier) @name)
-                        (class_declaration name: (identifier) @name)
+                        (class_declaration name: (type_identifier) @name)
                         (lexical_declaration (variable_declarator name: (identifier) @name))
                         (interface_declaration name: (type_identifier) @name)
                         (type_alias_declaration name: (type_identifier) @name)

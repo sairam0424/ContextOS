@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getSharedDatabase, MemoryStream, ReflectionEngine, SkillLibrary, WorkspaceEventBus } from "@context-os/core";
-import { handleToolError } from "../utils.js";
+import { getSharedDatabase, getSharedEmbeddingService, MemoryStream, ReflectionEngine, SkillLibrary, WorkspaceEventBus } from "@context-os/core";
+import { handleToolError, sanitizeUntrustedContent } from "../utils.js";
 
 const MEMORY_TYPE_ENUM = z.enum(["observation", "reflection", "plan", "skill"]);
 
@@ -9,11 +9,14 @@ let memoryStream: MemoryStream | null = null;
 let reflectionEngine: ReflectionEngine | null = null;
 let skillLibrary: SkillLibrary | null = null;
 
+// Pass the shared embedding service so cognitive retrieval uses cosine relevance
+// (WS-B); without it MemoryStream/ReflectionEngine/SkillLibrary fall back to
+// lexical token overlap.
 function getMemoryStream(): MemoryStream {
   if (!memoryStream) {
     const db = getSharedDatabase();
     const eventBus = new WorkspaceEventBus();
-    memoryStream = new MemoryStream(db.getRawDb(), eventBus);
+    memoryStream = new MemoryStream(db.getRawDb(), eventBus, undefined, getSharedEmbeddingService());
   }
   return memoryStream;
 }
@@ -22,7 +25,7 @@ function getReflectionEngine(): ReflectionEngine {
   if (!reflectionEngine) {
     const db = getSharedDatabase();
     const eventBus = new WorkspaceEventBus();
-    reflectionEngine = new ReflectionEngine(db.getRawDb(), eventBus, getMemoryStream());
+    reflectionEngine = new ReflectionEngine(db.getRawDb(), eventBus, getMemoryStream(), getSharedEmbeddingService());
   }
   return reflectionEngine;
 }
@@ -30,7 +33,7 @@ function getReflectionEngine(): ReflectionEngine {
 function getSkillLibrary(): SkillLibrary {
   if (!skillLibrary) {
     const db = getSharedDatabase();
-    skillLibrary = new SkillLibrary(db.getRawDb());
+    skillLibrary = new SkillLibrary(db.getRawDb(), getSharedEmbeddingService());
   }
   return skillLibrary;
 }
@@ -68,8 +71,9 @@ export function registerCognitiveTools(server: McpServer): void {
     async ({ agentId, query, limit, type }) => {
       try {
         const entries = getMemoryStream().retrieve(agentId, query, { limit, type });
+        // Stored memory entries are agent-supplied (cognitive_observe) — quarantine.
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(entries) }],
+          content: [{ type: "text" as const, text: sanitizeUntrustedContent(JSON.stringify(entries), `memory:${agentId}`) }],
           isError: false as const,
         };
       } catch (error: unknown) {
@@ -139,8 +143,9 @@ export function registerCognitiveTools(server: McpServer): void {
     async ({ query, limit }) => {
       try {
         const skills = getSkillLibrary().search(query, limit);
+        // Stored skills are agent-supplied (skill_store) — quarantine.
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(skills) }],
+          content: [{ type: "text" as const, text: sanitizeUntrustedContent(JSON.stringify(skills), 'skills') }],
           isError: false as const,
         };
       } catch (error: unknown) {

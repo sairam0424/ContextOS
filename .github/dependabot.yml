@@ -10,7 +10,18 @@ updates:
         dependency-type: "development"
       typescript:
         patterns: ["typescript", "@types/*"]
+      testing:
+        patterns: ["mocha", "chai", "vitest", "@testing-library/*", "c8"]
+      eslint:
+        patterns: ["eslint", "eslint-*", "typescript-eslint", "@eslint/*"]
+    ignore:
+      - dependency-name: "better-sqlite3"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]

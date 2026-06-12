@@ -31,6 +31,17 @@ export interface PolicyDecision {
   readonly reason: string;
 }
 
+/**
+ * Default effect applied when NO policy rule matches. Cedar/OPA-style engines
+ * default-DENY: absence of an explicit allow is a denial. This is configurable
+ * (and explicit) so the safe default can be asserted in tests.
+ */
+export type DefaultEffect = 'allow' | 'deny';
+
+export interface PolicyEngineOptions {
+  readonly defaultEffect?: DefaultEffect;
+}
+
 interface PolicyRow {
   id: number;
   name: string;
@@ -49,10 +60,12 @@ export class PolicyEngine {
   private readonly db: RawDB;
   private readonly trustEngine: TrustEngine;
   private readonly rateCounters: Map<string, RateEntry> = new Map();
+  private readonly defaultEffect: DefaultEffect;
 
-  constructor(db: RawDB, trustEngine: TrustEngine) {
+  constructor(db: RawDB, trustEngine: TrustEngine, options: PolicyEngineOptions = {}) {
     this.db = db;
     this.trustEngine = trustEngine;
+    this.defaultEffect = options.defaultEffect ?? 'deny';
   }
 
   addPolicy(opts: {
@@ -97,26 +110,44 @@ export class PolicyEngine {
       'SELECT * FROM policies WHERE enabled = 1 ORDER BY priority DESC'
     ).all() as PolicyRow[];
 
+    // Collect every matching rule, then resolve with forbid-overrides
+    // (Cedar/OPA semantics): a single 'deny' wins over any number of
+    // 'allow's, and 'require_approval' wins over 'allow' but yields to 'deny'.
+    let allowMatch: { policy: string; effect: PolicyEffect } | null = null;
+    let approvalMatch: { policy: string; effect: PolicyEffect } | null = null;
+
     for (const row of rows) {
       const rules: PolicyRule[] = JSON.parse(row.rules);
       for (const rule of rules) {
-        if (this.matchesCondition(rule.condition, agentId, resource, action)) {
-          const allowed = rule.effect === 'allow';
-          return {
-            allowed,
-            effect: rule.effect,
-            matchedPolicy: row.name,
-            reason: `Policy '${row.name}' matched with effect '${rule.effect}'`,
-          };
+        if (!this.matchesCondition(rule.condition, agentId, resource, action)) continue;
+
+        if (rule.effect === 'deny') {
+          // Deny wins immediately — no further evaluation can override it.
+          return this.decide(false, 'deny', row.name);
+        }
+        if (rule.effect === 'require_approval' && approvalMatch === null) {
+          approvalMatch = { policy: row.name, effect: 'require_approval' };
+        } else if (rule.effect === 'allow' && allowMatch === null) {
+          allowMatch = { policy: row.name, effect: 'allow' };
         }
       }
     }
 
+    if (approvalMatch !== null) {
+      return this.decide(false, 'require_approval', approvalMatch.policy);
+    }
+    if (allowMatch !== null) {
+      return this.decide(true, 'allow', allowMatch.policy);
+    }
+
+    // No rule matched: apply the configured default. Defaults to DENY
+    // (fail-closed) so absence of an explicit allow is a denial.
+    const allowed = this.defaultEffect === 'allow';
     return {
-      allowed: true,
-      effect: 'allow',
+      allowed,
+      effect: this.defaultEffect,
       matchedPolicy: null,
-      reason: 'No policy matched',
+      reason: `No policy matched — applying default effect '${this.defaultEffect}'`,
     };
   }
 
@@ -131,6 +162,14 @@ export class PolicyEngine {
     return this.rowToPolicy(row);
   }
 
+  /** Build a PolicyDecision with a distinct, caller-routable reason per effect. */
+  private decide(allowed: boolean, effect: PolicyEffect, policyName: string): PolicyDecision {
+    const reason = effect === 'require_approval'
+      ? `Policy '${policyName}' requires approval — route to elicitation`
+      : `Policy '${policyName}' matched with effect '${effect}'`;
+    return { allowed, effect, matchedPolicy: policyName, reason };
+  }
+
   private matchesCondition(condition: PolicyCondition, agentId: string, resource: string, action: string): boolean {
     switch (condition.type) {
       case 'trust_below': {
@@ -138,8 +177,10 @@ export class PolicyEngine {
         return score.overall < condition.threshold;
       }
       case 'resource_matches': {
-        const regex = new RegExp(condition.pattern);
-        return regex.test(resource);
+        // Anchored glob/prefix matching mirrors CapabilityTokenService.matchResource.
+        // This deliberately avoids `new RegExp(condition.pattern)` — an
+        // attacker-influenceable, unbounded regex is a ReDoS sink.
+        return this.matchResource(condition.pattern, resource);
       }
       case 'action_type': {
         return action === condition.action;
@@ -156,6 +197,20 @@ export class PolicyEngine {
         return condition.conditions.some(c => this.matchesCondition(c, agentId, resource, action));
       }
     }
+  }
+
+  /**
+   * Safe glob/prefix resource matcher (mirrors CapabilityTokenService.matchResource).
+   * Supports '*' (match-all), a trailing ':*' prefix wildcard, and exact match.
+   * No regex — bounded, linear, not attacker-influenceable.
+   */
+  private matchResource(pattern: string, resource: string): boolean {
+    if (pattern === '*') return true;
+    if (pattern.endsWith(':*')) {
+      const prefix = pattern.slice(0, -1);
+      return resource.startsWith(prefix);
+    }
+    return pattern === resource;
   }
 
   private incrementRateCounter(agentId: string): void {
