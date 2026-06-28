@@ -69,17 +69,19 @@ function hasCheckConstraint(db: RawDB, table: string): boolean {
  * ON DELETE SET NULL FK still maps 1:1. Only child tables are rebuilt here; the
  * referenced parents are untouched, so no cascade fires during migration.
  *
- * `preCopyFixups` (optional) is a list of statements run BEFORE the copy that
- * reconcile a legacy DB built without FK enforcement to the new constraint:
- *   - CASCADE tables: DELETE orphan rows (a child whose parent is already gone is
- *     dead data — the very violation the FK forbids — and copying it would raise
- *     "FOREIGN KEY constraint failed", rolling the unit back and wedging migration
- *     forever).
- *   - SET NULL tables: UPDATE orphan references to NULL (preserving the audit row
- *     while satisfying the FK), so no rows are lost.
- * The row-count check compares the FIXED-UP source against the copy, still proving
- * the copy step itself loses nothing; only pre-existing orphans are reconciled,
- * and any DELETEd count is logged.
+ * `preCopyFixups` (optional) is a list of statements run BEFORE the copy on the
+ * ORIGINAL table. Use only for CASCADE tables where orphan rows must be DELETEd
+ * (a child whose parent is already gone is dead data that would raise
+ * "FOREIGN KEY constraint failed" during the copy). Do NOT use for SET NULL
+ * fixups here — the source table still carries NOT NULL constraints and an UPDATE
+ * setting a column to NULL would fail immediately.
+ *
+ * `postCopyFixups` (optional) is a list of statements run AFTER the copy on the
+ * TEMPORARY table (before it is renamed). Use for SET NULL reconciliation: the
+ * tmp table already has nullable FK columns, so UPDATE ... SET col = NULL
+ * succeeds without violating any constraint. The row-count check runs against the
+ * tmp table BEFORE these fixups fire, proving the copy itself loses nothing; the
+ * fixups only reconcile orphan references on rows that are already safely copied.
  */
 function rebuildTableWithConstraints(
   db: RawDB,
@@ -88,6 +90,7 @@ function rebuildTableWithConstraints(
   copyColumns: readonly string[],
   indexes: readonly string[],
   preCopyFixups: readonly string[] = [],
+  postCopyFixups: readonly string[] = [],
 ): void {
   const cols = copyColumns.join(', ');
   const tmp = `${table}_fk_new`;
@@ -100,11 +103,31 @@ function rebuildTableWithConstraints(
   }
 
   db.exec(newTableDDL.replace(`__TMP__`, tmp));
+
+  // Defer FK checks to the end of the surrounding transaction so that the copy
+  // can succeed even when rows reference agents/parents that no longer exist.
+  // The postCopyFixups below null those dangling references BEFORE the
+  // transaction commits, so the final state satisfies all FK constraints.
+  // (PRAGMA defer_foreign_keys is safe to set inside a transaction — unlike
+  // PRAGMA foreign_keys which SQLite silently ignores mid-transaction.)
+  if (postCopyFixups.length > 0) {
+    db.pragma('defer_foreign_keys = ON');
+  }
+
   db.exec(`INSERT INTO ${tmp} (${cols}) SELECT ${cols} FROM ${table}`);
 
   const copied = (db.prepare(`SELECT COUNT(*) AS n FROM ${tmp}`).get() as { n: number }).n;
   if (copied !== before) {
     throw new Error(`FK rebuild of "${table}" lost rows: ${before} -> ${copied}`);
+  }
+
+  // Run SET NULL reconciliation on the tmp table AFTER the row-count check.
+  // At this point tmp has nullable FK columns, so NULL assignments succeed.
+  // Replace all occurrences of the original table name with the tmp name so the
+  // fixup SQL operates on the right target. After these fixups the deferred FK
+  // constraints are satisfied, so the transaction commit succeeds cleanly.
+  for (const fixup of postCopyFixups) {
+    db.exec(fixup.replaceAll(table, tmp));
   }
 
   db.exec(`DROP TABLE ${table}`);
@@ -430,6 +453,12 @@ const MIGRATIONS: readonly Migration[] = [
       // agent_messages.from_agent / to_agent reference agents(id). A deregistered
       // agent must not erase its message history (audit trail), so the agent
       // pointer is nulled rather than cascaded.
+      //
+      // NOTE: the SET NULL fixups run as postCopyFixups (on the tmp table, after
+      // copy) because the source table has from_agent/to_agent NOT NULL — running
+      // UPDATE SET col = NULL on the source would fail with a NOT NULL constraint
+      // error. The tmp table already declares these columns nullable, so the UPDATE
+      // succeeds there.
       if (!hasForeignKey(db, 'agent_messages')) {
         rebuildTableWithConstraints(
           db,
@@ -449,7 +478,9 @@ const MIGRATIONS: readonly Migration[] = [
           )`,
           ['id', 'correlation_id', 'from_agent', 'to_agent', 'intent', 'payload', 'timestamp', 'delivered_at', 'ttl'],
           [`CREATE INDEX IF NOT EXISTS idx_messages_to ON agent_messages(to_agent, delivered_at)`],
-          // Null dangling agent pointers (preserve the message audit row).
+          // preCopyFixups: none (SET NULL fixups cannot run on the NOT NULL source table)
+          [],
+          // postCopyFixups: null dangling agent pointers on the tmp table after copy.
           [
             `UPDATE agent_messages SET from_agent = NULL WHERE from_agent IS NOT NULL AND from_agent NOT IN (SELECT id FROM agents)`,
             `UPDATE agent_messages SET to_agent = NULL WHERE to_agent IS NOT NULL AND to_agent NOT IN (SELECT id FROM agents)`,
@@ -459,6 +490,8 @@ const MIGRATIONS: readonly Migration[] = [
 
       // trust_events.agent_id references agents(id). Trust history is an audit
       // ledger; preserve the events but null the agent pointer on deregistration.
+      // Same postCopyFixups pattern as agent_messages: source has agent_id NOT NULL,
+      // so the SET NULL update must run on the tmp table after copy.
       if (!hasForeignKey(db, 'trust_events')) {
         rebuildTableWithConstraints(
           db,
@@ -475,6 +508,9 @@ const MIGRATIONS: readonly Migration[] = [
           )`,
           ['id', 'agent_id', 'event_type', 'dimension', 'delta', 'reason', 'timestamp'],
           [`CREATE INDEX IF NOT EXISTS idx_trust_events_agent ON trust_events(agent_id, timestamp)`],
+          // preCopyFixups: none (SET NULL fixup cannot run on the NOT NULL source table)
+          [],
+          // postCopyFixups: null dangling agent pointer on the tmp table after copy.
           [`UPDATE trust_events SET agent_id = NULL WHERE agent_id IS NOT NULL AND agent_id NOT IN (SELECT id FROM agents)`],
         );
       }
@@ -485,6 +521,10 @@ const MIGRATIONS: readonly Migration[] = [
       // token must never list itself as its own delegation parent. parent_token_id
       // is left WITHOUT a FK on purpose: revocation/expiry semantics are handled in
       // application code and a CASCADE here could silently mass-revoke a chain.
+      //
+      // Same postCopyFixups pattern: source has agent_id NOT NULL, so the SET NULL
+      // update must run on the tmp table. The self-reference CHECK fixup also runs
+      // post-copy on tmp (it's an UPDATE, not a DELETE, so row count is preserved).
       if (!hasForeignKey(db, 'capability_tokens')) {
         rebuildTableWithConstraints(
           db,
@@ -506,8 +546,10 @@ const MIGRATIONS: readonly Migration[] = [
           )`,
           ['id', 'agent_id', 'capabilities', 'issued_by', 'issued_at', 'expires_at', 'revoked', 'parent_token_id', 'max_delegation_depth', 'signature', 'principal'],
           [`CREATE INDEX IF NOT EXISTS idx_cap_tokens_agent ON capability_tokens(agent_id, revoked)`],
-          // Null the agent pointer on tokens whose agent is gone; also break any
-          // self-referencing parent pointer that would violate the new CHECK.
+          // preCopyFixups: none (SET NULL fixups cannot run on the NOT NULL source table)
+          [],
+          // postCopyFixups: null dangling agent pointer and break self-referencing
+          // parent_token_id that would violate the new CHECK — run on tmp after copy.
           [
             `UPDATE capability_tokens SET agent_id = NULL WHERE agent_id IS NOT NULL AND agent_id NOT IN (SELECT id FROM agents)`,
             `UPDATE capability_tokens SET parent_token_id = NULL WHERE parent_token_id = id`,
