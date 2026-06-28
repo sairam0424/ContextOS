@@ -25,6 +25,7 @@ import { watchCommand } from "./commands/watch.js";
 import { dashboardCommand } from "./commands/dashboard.js";
 import { missionCommand } from "./commands/mission.js";
 import { completionCommand } from "./commands/completion.js";
+import { backupCommand } from "./commands/backup.js";
 
 const program = new Command();
 
@@ -60,6 +61,7 @@ watchCommand(program);
 dashboardCommand(program);
 missionCommand(program);
 completionCommand(program);
+backupCommand(program);
 
 process.on('uncaughtException', (error) => {
   console.error(chalk.red(`Fatal error: ${error.message}`));

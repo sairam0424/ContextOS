@@ -40,6 +40,78 @@ function hasColumn(db: RawDB, table: string, column: string): boolean {
   return (db.pragma(`table_info(${table})`) as any[]).some((c: any) => c.name === column);
 }
 
+/** True once `table` already declares at least one FOREIGN KEY (idempotency guard). */
+function hasForeignKey(db: RawDB, table: string): boolean {
+  return (db.pragma(`foreign_key_list(${table})`) as any[]).length > 0;
+}
+
+/** True once `table`'s DDL contains a CHECK constraint (idempotency guard for CHECK-only rebuilds). */
+function hasCheckConstraint(db: RawDB, table: string): boolean {
+  const row = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`)
+    .get(table) as { sql: string | null } | undefined;
+  return /\bCHECK\s*\(/i.test(row?.sql ?? '');
+}
+
+/**
+ * Rebuilds a child table to attach FOREIGN KEY / CHECK constraints that SQLite
+ * cannot add via ALTER TABLE. Reuses the proven create-new + copy-all + drop +
+ * rename pattern from migration '006_locks_composite_pk' and adds two safety nets:
+ *
+ *  - Row-count verification: the copied row count MUST equal the source count, or
+ *    we throw and the surrounding transaction rolls the whole unit back (no
+ *    half-migrated table is ever committed). Content preservation is mandatory.
+ *  - Index re-creation: DROP TABLE silently drops a table's indexes, so each
+ *    rebuild re-issues the CREATE INDEX statements the table originally owned.
+ *
+ * `copyColumns` is the explicit, ordered column list copied INTO the new table
+ * (SELECTed from the old one) so a column whose NOT NULL was relaxed for an
+ * ON DELETE SET NULL FK still maps 1:1. Only child tables are rebuilt here; the
+ * referenced parents are untouched, so no cascade fires during migration.
+ *
+ * `preCopyFixups` (optional) is a list of statements run BEFORE the copy that
+ * reconcile a legacy DB built without FK enforcement to the new constraint:
+ *   - CASCADE tables: DELETE orphan rows (a child whose parent is already gone is
+ *     dead data — the very violation the FK forbids — and copying it would raise
+ *     "FOREIGN KEY constraint failed", rolling the unit back and wedging migration
+ *     forever).
+ *   - SET NULL tables: UPDATE orphan references to NULL (preserving the audit row
+ *     while satisfying the FK), so no rows are lost.
+ * The row-count check compares the FIXED-UP source against the copy, still proving
+ * the copy step itself loses nothing; only pre-existing orphans are reconciled,
+ * and any DELETEd count is logged.
+ */
+function rebuildTableWithConstraints(
+  db: RawDB,
+  table: string,
+  newTableDDL: string,
+  copyColumns: readonly string[],
+  indexes: readonly string[],
+  preCopyFixups: readonly string[] = [],
+): void {
+  const cols = copyColumns.join(', ');
+  const tmp = `${table}_fk_new`;
+
+  const original = (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+  for (const fixup of preCopyFixups) db.exec(fixup);
+  const before = (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+  if (before !== original) {
+    log.debug({ table, purgedOrphans: original - before }, 'Purged orphan rows before FK rebuild');
+  }
+
+  db.exec(newTableDDL.replace(`__TMP__`, tmp));
+  db.exec(`INSERT INTO ${tmp} (${cols}) SELECT ${cols} FROM ${table}`);
+
+  const copied = (db.prepare(`SELECT COUNT(*) AS n FROM ${tmp}`).get() as { n: number }).n;
+  if (copied !== before) {
+    throw new Error(`FK rebuild of "${table}" lost rows: ${before} -> ${copied}`);
+  }
+
+  db.exec(`DROP TABLE ${table}`);
+  db.exec(`ALTER TABLE ${tmp} RENAME TO ${table}`);
+  for (const idx of indexes) db.exec(idx);
+}
+
 /**
  * Ordered, in-code migration registry (KISS — no SQL files, no framework).
  * Each unit is recorded in `schema_migrations` once applied and runs exactly
@@ -231,6 +303,243 @@ const MIGRATIONS: readonly Migration[] = [
       }
       if (!hasColumn(db, 'capability_tokens', 'principal')) {
         db.exec(`ALTER TABLE capability_tokens ADD COLUMN principal TEXT`);
+      }
+    },
+  },
+  {
+    name: '011_edges_source_target_index',
+    up(db) {
+      // v4 opportunity #15: graph.ts getAffinities() runs a WITH RECURSIVE walk
+      // whose hot inner step is `JOIN edges e ON e.source = w.node`. Only the
+      // single-column idx_edges_source (migration 007) existed, so each hop still
+      // touched the row to read `target`/`weight`. A composite (source, target)
+      // index is covering for the join's lookup side, letting SQLite resolve every
+      // hop with an index seek. Idempotent via IF NOT EXISTS.
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_edges_source_target ON edges(source, target)`);
+    },
+  },
+  {
+    name: '012_foreign_keys',
+    up(db) {
+      // v4 opportunity #20: connection.ts sets PRAGMA foreign_keys=ON but the
+      // schema declared ZERO foreign keys, so referential integrity was never
+      // actually enforced. SQLite cannot ALTER TABLE ADD CONSTRAINT, so each FK
+      // requires the create-new + copy + rename rebuild proven in migration 006.
+      //
+      // Only CHILD tables are rebuilt; their referenced PARENTS (documents,
+      // agents, task_nodes, hyperedges, vote_requests) are left untouched, so no
+      // cascade fires during the migration itself. Each rebuild is guarded by
+      // hasForeignKey()/hasCheckConstraint() so re-running this unit no-ops, and
+      // rebuildTableWithConstraints() verifies row counts to guarantee content
+      // preservation (a row-loss throws and rolls back the whole unit).
+      //
+      // PRAGMA foreign_keys cannot be toggled inside a transaction (SQLite
+      // ignores it), and migrateSchema wraps this unit in one — that is fine here
+      // because we never drop a referenced parent, only childen with no inbound
+      // references of their own.
+
+      // --- ON DELETE CASCADE (ownership: child is meaningless without its parent) ---
+
+      // task_dependencies (task_id, depends_on) both reference task_nodes(id).
+      // Deleting a task removes every dependency edge that names it on either side.
+      if (!hasForeignKey(db, 'task_dependencies')) {
+        rebuildTableWithConstraints(
+          db,
+          'task_dependencies',
+          `CREATE TABLE __TMP__ (
+            task_id TEXT NOT NULL,
+            depends_on TEXT NOT NULL,
+            PRIMARY KEY (task_id, depends_on),
+            FOREIGN KEY (task_id) REFERENCES task_nodes(id) ON DELETE CASCADE,
+            FOREIGN KEY (depends_on) REFERENCES task_nodes(id) ON DELETE CASCADE
+          )`,
+          ['task_id', 'depends_on'],
+          [],
+          // Drop dependency edges that name a task which no longer exists.
+          [`DELETE FROM task_dependencies WHERE task_id NOT IN (SELECT id FROM task_nodes)
+              OR depends_on NOT IN (SELECT id FROM task_nodes)`],
+        );
+      }
+
+      // hyperedge_members.hyperedge_id references hyperedges(id). Deleting a
+      // hyperedge removes its membership rows.
+      if (!hasForeignKey(db, 'hyperedge_members')) {
+        rebuildTableWithConstraints(
+          db,
+          'hyperedge_members',
+          `CREATE TABLE __TMP__ (
+            hyperedge_id INTEGER NOT NULL,
+            node_id TEXT NOT NULL,
+            role TEXT DEFAULT 'member',
+            PRIMARY KEY (hyperedge_id, node_id),
+            FOREIGN KEY (hyperedge_id) REFERENCES hyperedges(id) ON DELETE CASCADE
+          )`,
+          ['hyperedge_id', 'node_id', 'role'],
+          [`CREATE INDEX IF NOT EXISTS idx_hyperedge_members_node ON hyperedge_members(node_id)`],
+          [`DELETE FROM hyperedge_members WHERE hyperedge_id NOT IN (SELECT id FROM hyperedges)`],
+        );
+      }
+
+      // votes.request_id references vote_requests(id). Deleting a vote request
+      // discards the ballots cast for it.
+      if (!hasForeignKey(db, 'votes')) {
+        rebuildTableWithConstraints(
+          db,
+          'votes',
+          `CREATE TABLE __TMP__ (
+            request_id TEXT NOT NULL,
+            voter_id TEXT NOT NULL,
+            choice TEXT NOT NULL,
+            weight REAL DEFAULT 1.0,
+            timestamp INTEGER NOT NULL,
+            PRIMARY KEY (request_id, voter_id),
+            FOREIGN KEY (request_id) REFERENCES vote_requests(id) ON DELETE CASCADE
+          )`,
+          ['request_id', 'voter_id', 'choice', 'weight', 'timestamp'],
+          [`CREATE INDEX IF NOT EXISTS idx_votes_request ON votes(request_id)`],
+          [`DELETE FROM votes WHERE request_id NOT IN (SELECT id FROM vote_requests)`],
+        );
+      }
+
+      // intelligence_queue.doc_id references documents(id) (it IS the document
+      // rowid — see core.ts upsert/enqueue paths). Deleting a document drops its
+      // queued (re-)embedding work. Preserves the UNIQUE(doc_id) contract.
+      if (!hasForeignKey(db, 'intelligence_queue')) {
+        rebuildTableWithConstraints(
+          db,
+          'intelligence_queue',
+          `CREATE TABLE __TMP__ (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            doc_id INTEGER UNIQUE NOT NULL,
+            priority INTEGER DEFAULT 1,
+            created_at INTEGER DEFAULT (strftime('%s','now')),
+            retry_count INTEGER DEFAULT 0,
+            last_error TEXT,
+            FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
+          )`,
+          ['id', 'doc_id', 'priority', 'created_at', 'retry_count', 'last_error'],
+          [`CREATE INDEX IF NOT EXISTS idx_intelligence_queue_priority ON intelligence_queue(priority DESC, id ASC)`],
+          [`DELETE FROM intelligence_queue WHERE doc_id NOT IN (SELECT id FROM documents)`],
+        );
+      }
+
+      // --- ON DELETE SET NULL (audit-preserving: keep the row, forget the ref) ---
+      // SET NULL requires the FK column to be nullable, so each rebuild RELAXES
+      // the original NOT NULL on the referencing column(s).
+
+      // agent_messages.from_agent / to_agent reference agents(id). A deregistered
+      // agent must not erase its message history (audit trail), so the agent
+      // pointer is nulled rather than cascaded.
+      if (!hasForeignKey(db, 'agent_messages')) {
+        rebuildTableWithConstraints(
+          db,
+          'agent_messages',
+          `CREATE TABLE __TMP__ (
+            id TEXT PRIMARY KEY,
+            correlation_id TEXT,
+            from_agent TEXT,
+            to_agent TEXT,
+            intent TEXT NOT NULL,
+            payload TEXT DEFAULT '{}',
+            timestamp INTEGER NOT NULL,
+            delivered_at INTEGER,
+            ttl INTEGER,
+            FOREIGN KEY (from_agent) REFERENCES agents(id) ON DELETE SET NULL,
+            FOREIGN KEY (to_agent) REFERENCES agents(id) ON DELETE SET NULL
+          )`,
+          ['id', 'correlation_id', 'from_agent', 'to_agent', 'intent', 'payload', 'timestamp', 'delivered_at', 'ttl'],
+          [`CREATE INDEX IF NOT EXISTS idx_messages_to ON agent_messages(to_agent, delivered_at)`],
+          // Null dangling agent pointers (preserve the message audit row).
+          [
+            `UPDATE agent_messages SET from_agent = NULL WHERE from_agent IS NOT NULL AND from_agent NOT IN (SELECT id FROM agents)`,
+            `UPDATE agent_messages SET to_agent = NULL WHERE to_agent IS NOT NULL AND to_agent NOT IN (SELECT id FROM agents)`,
+          ],
+        );
+      }
+
+      // trust_events.agent_id references agents(id). Trust history is an audit
+      // ledger; preserve the events but null the agent pointer on deregistration.
+      if (!hasForeignKey(db, 'trust_events')) {
+        rebuildTableWithConstraints(
+          db,
+          'trust_events',
+          `CREATE TABLE __TMP__ (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id TEXT,
+            event_type TEXT NOT NULL,
+            dimension TEXT NOT NULL,
+            delta REAL NOT NULL,
+            reason TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL
+          )`,
+          ['id', 'agent_id', 'event_type', 'dimension', 'delta', 'reason', 'timestamp'],
+          [`CREATE INDEX IF NOT EXISTS idx_trust_events_agent ON trust_events(agent_id, timestamp)`],
+          [`UPDATE trust_events SET agent_id = NULL WHERE agent_id IS NOT NULL AND agent_id NOT IN (SELECT id FROM agents)`],
+        );
+      }
+
+      // capability_tokens.agent_id references agents(id) (SET NULL: keep the token
+      // audit row when an agent leaves). ALSO add the self-reference CHECK
+      // (id != parent_token_id) since this table is already being rebuilt — a
+      // token must never list itself as its own delegation parent. parent_token_id
+      // is left WITHOUT a FK on purpose: revocation/expiry semantics are handled in
+      // application code and a CASCADE here could silently mass-revoke a chain.
+      if (!hasForeignKey(db, 'capability_tokens')) {
+        rebuildTableWithConstraints(
+          db,
+          'capability_tokens',
+          `CREATE TABLE __TMP__ (
+            id TEXT PRIMARY KEY,
+            agent_id TEXT,
+            capabilities TEXT NOT NULL DEFAULT '[]',
+            issued_by TEXT NOT NULL,
+            issued_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            revoked INTEGER DEFAULT 0,
+            parent_token_id TEXT,
+            max_delegation_depth INTEGER DEFAULT 0,
+            signature TEXT,
+            principal TEXT,
+            FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL,
+            CHECK (parent_token_id IS NULL OR id != parent_token_id)
+          )`,
+          ['id', 'agent_id', 'capabilities', 'issued_by', 'issued_at', 'expires_at', 'revoked', 'parent_token_id', 'max_delegation_depth', 'signature', 'principal'],
+          [`CREATE INDEX IF NOT EXISTS idx_cap_tokens_agent ON capability_tokens(agent_id, revoked)`],
+          // Null the agent pointer on tokens whose agent is gone; also break any
+          // self-referencing parent pointer that would violate the new CHECK.
+          [
+            `UPDATE capability_tokens SET agent_id = NULL WHERE agent_id IS NOT NULL AND agent_id NOT IN (SELECT id FROM agents)`,
+            `UPDATE capability_tokens SET parent_token_id = NULL WHERE parent_token_id = id`,
+          ],
+        );
+      }
+
+      // --- CHECK-only rebuild (no FK): community_summaries self-reference guard ---
+      // community_summaries has no ownership FK to add (its node_ids are a JSON
+      // blob, not a referencing column), but a community must never be its own
+      // parent. Rebuild solely to attach CHECK(id != parent_community_id), guarded
+      // by hasCheckConstraint() so it runs at most once.
+      if (!hasCheckConstraint(db, 'community_summaries')) {
+        rebuildTableWithConstraints(
+          db,
+          'community_summaries',
+          `CREATE TABLE __TMP__ (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level INTEGER NOT NULL DEFAULT 0,
+            node_ids TEXT NOT NULL DEFAULT '[]',
+            summary TEXT NOT NULL,
+            parent_community_id INTEGER,
+            modularity REAL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            CHECK (parent_community_id IS NULL OR id != parent_community_id)
+          )`,
+          ['id', 'level', 'node_ids', 'summary', 'parent_community_id', 'modularity', 'created_at', 'updated_at'],
+          [`CREATE INDEX IF NOT EXISTS idx_community_level ON community_summaries(level)`],
+          // Break any self-referencing parent pointer so the new CHECK accepts the copy.
+          [`UPDATE community_summaries SET parent_community_id = NULL WHERE parent_community_id = id`],
+        );
       }
     },
   },

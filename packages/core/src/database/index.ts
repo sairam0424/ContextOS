@@ -12,6 +12,7 @@ import { ConfigRepository } from './config.js';
 import { SymbolsRepository } from './symbols.js';
 import { createChildLogger } from '../logger.js';
 import path from 'path';
+import fs from 'fs-extra';
 
 import type { DBRecord, RawDB } from './types.js';
 
@@ -131,6 +132,38 @@ export class DatabaseService {
 
   getConfig(key: string) { return this.config.get(key); }
   setConfig(key: string, value: string) { this.config.set(key, value); }
+
+  // --- Backup / Data Integrity ---
+
+  /**
+   * Produces a durable, atomic snapshot of the live database at `destPath`.
+   *
+   * Uses SQLite's `VACUUM INTO`, which writes a fully checkpointed, compacted
+   * copy in a single operation without holding a write lock that blocks live
+   * writers — the source DB stays online and usable throughout. The result is
+   * a standalone, openable .db file (no separate WAL/SHM needed) capturing the
+   * Merkle audit log, trust scores, and knowledge graph as of the snapshot.
+   *
+   * Touches no query path: this is a read-only operation against the source.
+   *
+   * NOTE: `VACUUM INTO` does not accept a bound parameter for the target path,
+   * so the path is embedded as a SQL string literal with single quotes escaped
+   * to prevent injection / breakage on paths containing quotes.
+   *
+   * Litestream is the opt-in follow-up for shared/multi-host deployments:
+   * continuous streaming replication of the WAL to object storage (S3/GCS) for
+   * point-in-time recovery. It runs as an external sidecar process against the
+   * same context.db and is intentionally NOT implemented here — this method is
+   * the single-node, on-demand durable snapshot primitive it would build upon.
+   */
+  backup(destPath: string): void {
+    const resolved = path.resolve(destPath);
+    fs.ensureDirSync(path.dirname(resolved));
+    // Escape single quotes for safe embedding as a SQL string literal.
+    const quoted = `'${resolved.replace(/'/g, "''")}'`;
+    this.db.exec(`VACUUM INTO ${quoted}`);
+    log.info({ destPath: resolved }, 'Database backup written');
+  }
 
   // --- Lifecycle ---
 

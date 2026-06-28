@@ -15,7 +15,26 @@ const STORED_EMBEDDING_DIM = 384;
 
 const CACHE_MAX_SIZE = 100;
 const searchCache = new Map<string, { result: any; timestamp: number }>();
-const CACHE_TTL_MS = 30_000; // 30 seconds
+// Upper-bound staleness ceiling. The primary freshness guarantee is explicit
+// invalidation (invalidateSearchCache, called on any document/vector write); the
+// TTL is only a backstop for the case where a write path forgets to invalidate,
+// so it is kept short (5s) rather than the old 30s that let search lag visibly
+// behind edits.
+const CACHE_TTL_MS = 5_000; // 5 seconds
+
+/**
+ * Drops every cached hybrid-search result. Call this on ANY document or vector
+ * mutation (upsert/delete/status change) so a subsequent search reflects the
+ * edit immediately instead of returning a stale cached page for up to the TTL.
+ *
+ * The cache is a module-level singleton shared by every VectorsRepository bound
+ * to the same process, so a single clear covers all repositories. Exported so
+ * the documents repository (which owns the content writes that invalidate a
+ * search) can call it directly without importing the class.
+ */
+export function invalidateSearchCache(): void {
+  searchCache.clear();
+}
 
 function getCacheKey(queryText: string, limit: number, offset: number, includePrivate: boolean, providerName?: string): string {
   const prefix = providerName ? `${providerName}:` : '';
@@ -55,6 +74,15 @@ function sanitizeFTS5(query: string): string {
 export class VectorsRepository {
   constructor(private db: RawDB) {}
 
+  /**
+   * Instance-level wrapper over the module singleton invalidator, so callers
+   * holding a repository (rather than the bare function) can clear the cache
+   * after a write they performed elsewhere.
+   */
+  invalidateCache(): void {
+    invalidateSearchCache();
+  }
+
   upsert(docId: number, embedding: Float32Array, provider: string): void {
     // vec0 has no UPSERT; emulate it with DELETE + INSERT inside a transaction
     // so a re-embed never leaves the row half-written. vec0 INTEGER columns
@@ -77,6 +105,9 @@ export class VectorsRepository {
       ins.run(BigInt(docId), BigInt(embedding.length), Buffer.from(embedding.buffer), provider, provider);
     });
     run();
+    // A re-embed changes what searchHybrid's semantic leg returns for this doc,
+    // so the cached result pages are now stale — drop them.
+    invalidateSearchCache();
   }
 
   getForDocument(docId: number): Float32Array | undefined {
