@@ -12,9 +12,9 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'npm'
@@ -37,7 +37,7 @@ jobs:
           echo "total=${TOTAL_KB}KB" >> "$GITHUB_OUTPUT"
 
       - name: Comment bundle size
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: bundle-size
           message: |
