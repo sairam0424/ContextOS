@@ -1,2 +1,0 @@
-
-56c3bb8cc1f768f7b1156435d6cc6fe70142525d	{"key":"make-fetch-happen:request-cache:https://registry.npmjs.org/-/whoami","integrity":"sha512-F8TuzxMjDiGpgTUrx2TOrY8tF1N80Wi4O/QXZIC2cCC8txtElUpTxEy5LIE+bcjyQuJv7wBbuBbjzWwbY4XiKg==","time":1775899545184,"size":30,"metadata":{"time":1775899545178,"url":"https://registry.npmjs.org/-/whoami","reqHeaders":{},"resHeaders":{"content-type":"application/json","date":"Sat, 11 Apr 2026 09:25:45 GMT","vary":"Accept-Encoding"},"options":{"compress":true}}}

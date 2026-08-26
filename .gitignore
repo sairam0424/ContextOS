@@ -8,7 +8,7 @@ coverage/
 .vscode/
 .idea/
 .npmrc
-npm_cache/
+.npm_cache/
 .context-index.json
 .turbo/
 
