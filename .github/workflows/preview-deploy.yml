@@ -15,9 +15,9 @@ jobs:
       pull-requests: write
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: 'npm'
@@ -30,7 +30,7 @@ jobs:
         run: cd workspace-dashboard && npx vite build --base="/ContextOS/pr-${PR_NUMBER}/"
 
       - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./workspace-dashboard/dist
@@ -38,7 +38,7 @@ jobs:
           keep_files: true
 
       - name: Comment preview URL
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2
         with:
           header: preview-deploy
           message: |
