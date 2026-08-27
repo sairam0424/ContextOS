@@ -15,9 +15,9 @@ jobs:
       pull-requests: write
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'npm'
@@ -38,7 +38,7 @@ jobs:
           keep_files: true
 
       - name: Comment preview URL
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: preview-deploy
           message: |
