@@ -42,7 +42,7 @@
     "front-matter": "^4.0.2",
     "fs-extra": "^11.2.0",
     "ora": "^8.0.1",
-    "ws": "^8.20.0"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",
