@@ -52,5 +52,10 @@
     "chai": "^5.2.0",
     "mocha": "^11.1.0",
     "typescript": "^5.8.2"
+  },
+  "overrides": {
+    "sharp": "^0.35.4",
+    "protobufjs": "^7.6.3",
+    "serialize-javascript": "^7.0.5"
   }
 }
