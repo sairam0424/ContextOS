@@ -31,12 +31,17 @@
     "@types/ws": "^8.18.1",
     "husky": "^9.1.7",
     "lint-staged": "^15.0.0",
-    "semantic-release": "^24.0.0",
+    "semantic-release": "^25.0.0",
     "turbo": "^2.9.5",
     "typedoc": "^0.27.0"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0"
+  },
+  "overrides": {
+    "protobufjs": "^7.6.1",
+    "sharp": "^0.35.0",
+    "serialize-javascript": "^7.0.5"
   },
   "license": "MIT"
 }
