@@ -1,11 +1,28 @@
 import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { globalIndexer } from "@context-os/core";
 import { registerBrowseTool } from "../tools/browse.js";
 import { registerSearchTool } from "../tools/search.js";
 import { workspaceRoot } from "../utils.js";
+
+/**
+ * `registerBrowseTool`'s handler calls the real `gitCommit()` on the success
+ * path (see the identical rationale in `browse.test.ts`), so this test makes
+ * a real commit against `workspaceRoot`'s actual git history. Capture HEAD
+ * before the test and, if it moved, `git reset` (mixed — deliberately NOT
+ * `--hard`) back to it in `afterEach`, exactly like `browse.test.ts` does.
+ * Without this, `fs.rmSync(PROBE_DIR, ...)` below only deletes the working
+ * copy — the commit itself survives, leaving a permanent stray "ingest"
+ * commit behind every time this test runs.
+ */
+function currentHead(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], { cwd: workspaceRoot })
+    .toString()
+    .trim();
+}
 
 /**
  * Proves the claim this plan's Spec makes: `workspace_search` needs NO changes
@@ -60,18 +77,26 @@ describe("workspace_browse then workspace_search — end to end, real index", fu
   let server: McpServer;
   let originalFetch: typeof globalThis.fetch;
   let indexedRelativePath: string | undefined;
+  let headBeforeTest: string;
 
   beforeEach(() => {
     server = newServer();
     registerBrowseTool(server);
     registerSearchTool(server);
     originalFetch = globalThis.fetch;
+    headBeforeTest = currentHead();
   });
 
   afterEach(async () => {
     globalThis.fetch = originalFetch;
     if (indexedRelativePath) {
       await globalIndexer.removeFile(indexedRelativePath).catch(() => {});
+    }
+    if (currentHead() !== headBeforeTest) {
+      // Mixed reset (no --hard): rewinds HEAD + the index only, never the
+      // working tree, so it cannot discard any other uncommitted edit
+      // sitting in a tracked file.
+      execFileSync("git", ["reset", headBeforeTest], { cwd: workspaceRoot });
     }
     fs.rmSync(PROBE_DIR, { recursive: true, force: true });
   });
