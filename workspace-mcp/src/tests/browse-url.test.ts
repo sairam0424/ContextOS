@@ -73,6 +73,36 @@ describe("browse-url", () => {
       );
     });
 
+    it("rejects both fc00::/7 halves (fc and fd) of the IPv6 Unique-Local range", () => {
+      assert.throws(
+        () => assertSafeHttpUrl("http://[fc00::1]/"),
+        /SEC_SSRF_PRIVATE_HOST/,
+      );
+      assert.throws(
+        () => assertSafeHttpUrl("http://[fd00::1]/"),
+        /SEC_SSRF_PRIVATE_HOST/,
+      );
+      assert.throws(
+        () => assertSafeHttpUrl("http://[fd12:3456:789a::1]/"),
+        /SEC_SSRF_PRIVATE_HOST/,
+      );
+    });
+
+    it("rejects IPv4-mapped IPv6 addresses that embed a private/loopback IPv4 host", () => {
+      assert.throws(
+        () => assertSafeHttpUrl("http://[::ffff:127.0.0.1]/"),
+        /SEC_SSRF_PRIVATE_HOST/,
+      );
+      assert.throws(
+        () => assertSafeHttpUrl("http://[::ffff:10.0.0.1]/"),
+        /SEC_SSRF_PRIVATE_HOST/,
+      );
+      assert.throws(
+        () => assertSafeHttpUrl("http://[::ffff:169.254.169.254]/"),
+        /SEC_SSRF_PRIVATE_HOST/,
+      );
+    });
+
     it("rejects .local mDNS hostnames", () => {
       assert.throws(
         () => assertSafeHttpUrl("http://printer.local/"),

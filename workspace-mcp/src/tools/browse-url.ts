@@ -19,10 +19,29 @@ const BLOCKED_HOSTNAME_PATTERNS: readonly RegExp[] = [
   /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/,
   /^0\.0\.0\.0$/,
   /^\[?::1\]?$/,
-  /^\[?fc[0-9a-f]{2}:/,
+  /^\[?f[cd][0-9a-f]{2}:/,
   /^\[?fe80:/,
   /\.local$/,
 ];
+
+/**
+ * If `host` is the canonical (post-`URL`-normalization) form of an
+ * IPv4-mapped IPv6 address — `::ffff:<hex>:<hex>`, e.g. the `[::ffff:7f00:1]`
+ * Node produces for `[::ffff:127.0.0.1]` — decode the embedded IPv4 address
+ * so it can be re-checked against the IPv4 denylist patterns above.
+ * Otherwise returns null.
+ */
+function decodeIpv4MappedHost(host: string): string | null {
+  const match = /^\[::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})\]$/.exec(host);
+  if (!match) {
+    return null;
+  }
+  const high = Number.parseInt(match[1], 16);
+  const low = Number.parseInt(match[2], 16);
+  return [(high >> 8) & 0xff, high & 0xff, (low >> 8) & 0xff, low & 0xff].join(
+    ".",
+  );
+}
 
 /**
  * SSRF guard for `workspace_browse`: the URL is agent/model-supplied and
@@ -44,7 +63,12 @@ export function assertSafeHttpUrl(raw: string): URL {
   }
 
   const host = url.hostname.toLowerCase();
-  if (BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(host))) {
+  const mappedIpv4 = decodeIpv4MappedHost(host);
+  const isBlocked =
+    BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(host)) ||
+    (mappedIpv4 !== null &&
+      BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(mappedIpv4)));
+  if (isBlocked) {
     throw new Error(
       `SEC_SSRF_PRIVATE_HOST: invalid target host '${host}' — private, loopback and link-local hosts are blocked.`,
     );
