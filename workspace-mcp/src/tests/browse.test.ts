@@ -15,10 +15,14 @@ import { registerBrowseTool } from "../tools/browse.js";
  * so it cannot be monkey-patched the way `globalThis.fetch` and
  * `globalIndexer.indexFile` are below). Exercising the real handler
  * therefore makes a real commit against `workspaceRoot`'s actual git
- * history. Capture HEAD before each test and hard-reset back to it
- * afterward so the test suite never leaves stray commits behind — this
- * only ever rewinds commits this same test just created, never anything
- * that predates it.
+ * history. Capture HEAD before each test and, if it moved, `git reset`
+ * (mixed — deliberately NOT `--hard`) back to it afterward so the suite
+ * never leaves a stray commit behind. A mixed reset only rewinds HEAD and
+ * the index; it never touches the working tree, so it cannot clobber any
+ * other uncommitted edit sitting in a tracked file (a `--hard` reset here
+ * already once destroyed an uncommitted edit to this very file). The
+ * probe file the reverted commit added is left behind, untracked, in the
+ * working tree by design — `afterEach` removes it explicitly below.
  */
 function currentHead(): string {
   return execFileSync("git", ["rev-parse", "HEAD"], { cwd: workspaceRoot })
@@ -63,7 +67,17 @@ function textOf(result: {
   return result.content.map((block) => block.text ?? "").join("\n");
 }
 
-describe("workspace_browse — SSRF guard, extraction, and write/index wiring", () => {
+describe("workspace_browse — SSRF guard, extraction, and write/index wiring", function () {
+  // The success-path test's handler calls the real gitCommit(), which spawns
+  // `git add` + `git commit` (through Husky's pre-commit hook) against this
+  // repo's actual working tree — comfortably over mocha's 2000ms default
+  // under any real system load. A timed-out test does not cancel the
+  // in-flight handler promise, so the write/commit can complete *after*
+  // mocha has already moved on and this suite's own afterEach git-history
+  // cleanup ran — leaving a stray commit behind. A generous suite-level
+  // timeout keeps the async work inside the test that owns it.
+  this.timeout(20_000);
+
   let server: McpServer;
   let originalFetch: typeof globalThis.fetch;
   let originalIndexFile: typeof globalIndexer.indexFile;
@@ -83,7 +97,10 @@ describe("workspace_browse — SSRF guard, extraction, and write/index wiring", 
     globalThis.fetch = originalFetch;
     globalIndexer.indexFile = originalIndexFile;
     if (currentHead() !== headBeforeTest) {
-      execFileSync("git", ["reset", "--hard", headBeforeTest], {
+      // Mixed reset (no --hard): rewinds HEAD + the index only, never the
+      // working tree, so it cannot discard any other uncommitted edit
+      // sitting in a tracked file.
+      execFileSync("git", ["reset", headBeforeTest], {
         cwd: workspaceRoot,
       });
     }
