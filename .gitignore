@@ -26,3 +26,8 @@ prompts/
 
 error-logs.md
 scratch-pad/
+
+# workspace_browse test/probe artifacts (never commit — disposable fixtures
+# from manual/automated exercising of the real git-backed write path)
+projects/__browse_search_probe__/
+projects/__browse_probe__/
