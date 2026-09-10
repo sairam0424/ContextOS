@@ -20,12 +20,16 @@ import { registerSwarmTools } from "./tools/swarm.js";
 import { registerGovernanceTools } from "./tools/governance.js";
 import { registerIntelligenceStreamTools } from "./tools/intelligence-stream.js";
 import { registerPredictiveTools } from "./tools/predictive.js";
+import { registerBrowseTool } from "./tools/browse.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts/index.js";
 import { setLoggingServer } from "./logging.js";
 import { subscriptionManager } from "./subscriptions.js";
 import { registerRoots } from "./roots.js";
-import { captureToolRegistrations, runToolIntegrityCheck } from "./tool-integrity.js";
+import {
+  captureToolRegistrations,
+  runToolIntegrityCheck,
+} from "./tool-integrity.js";
 
 export async function createMcpServer(version: string): Promise<McpServer> {
   const server = new McpServer({
@@ -66,6 +70,7 @@ export async function createMcpServer(version: string): Promise<McpServer> {
   registerGovernanceTools(server);
   registerIntelligenceStreamTools(server);
   registerPredictiveTools(server);
+  registerBrowseTool(server);
 
   // Stop capturing and run boot-time tool-set drift detection. Restore the
   // original `server.tool` first so resource/prompt registration is untouched,
