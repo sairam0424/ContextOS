@@ -1,0 +1,51 @@
+language: en-US
+tone_instructions: "Be concise and direct. Flag correctness and type-safety issues over style nits."
+early_access: false
+enable_free_tier: true
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    drafts: false
+    ignore_usernames: ["dependabot[bot]", "renovate[bot]", "github-actions[bot]"]
+    ignore_title_keywords: ["WIP", "DO NOT MERGE"]
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 3
+  path_filters:
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/.turbo/**"
+    - "!**/coverage/**"
+    - "!**/*.generated.*"
+    - "!**/node_modules/**"
+    - "!workspace-dashboard/dist/**"
+    - "!**/*.wasm"
+  path_instructions:
+    - path: "packages/*/src/**/*.ts"
+      instructions: >
+        Review as a workspace package. Flag cross-package API breakage,
+        missing exports in package.json/index.ts, and violations of this
+        package isolation boundary. Pay extra attention to better-sqlite3
+        query construction (parameterization) and tree-sitter parser
+        lifecycle/memory handling.
+    - path: "workspace-dashboard/**"
+      instructions: "React+Vite+Three.js dashboard. Flag unbounded re-renders, missing cleanup on Three.js scene objects, and unvalidated data from the MCP layer."
+    - path: "**/*.test.ts"
+      instructions: "Check test names are descriptive, edge cases and error paths are covered, and no test is skipped without a documented reason."
+  tools:
+    eslint:
+      enabled: true
+    biome:
+      enabled: true
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+
+knowledge_base:
+  learnings:
+    scope: local
+  code_guidelines:
+    enabled: true
