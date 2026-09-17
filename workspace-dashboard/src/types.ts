@@ -6,7 +6,15 @@ export interface LockRecord {
 export interface NodeData {
   id: string;
   label: string;
-  type: 'file' | 'tag' | 'mention' | 'symbol' | 'document' | 'entity' | 'mission' | 'bucket';
+  type:
+    | "file"
+    | "tag"
+    | "mention"
+    | "symbol"
+    | "document"
+    | "entity"
+    | "mission"
+    | "bucket";
   val?: number;
   color?: string;
   metadata?: {
@@ -17,7 +25,8 @@ export interface NodeData {
     line?: number;
     symbolType?: string;
     signature?: string;
-    intelligenceStatus?: 'pending' | 'processing' | 'ready' | 'failed' | 'repairing' | 'error';
+    intelligenceStatus?:
+      "pending" | "processing" | "ready" | "failed" | "repairing" | "error";
     // Aether 2.0+
     heat?: number;
     lock?: LockRecord | boolean;
@@ -32,7 +41,7 @@ export interface NodeData {
 export interface EdgeData {
   source: string;
   target: string;
-  type: 'tag' | 'mention' | 'semantic' | 'code-ref' | 'contains';
+  type: "tag" | "mention" | "semantic" | "code-ref" | "contains";
   weight: number;
 }
 
@@ -52,3 +61,22 @@ export interface PulseData {
     ready: number;
   };
 }
+
+// Wire protocol sent by the dashboard WebSocket server
+// (workspace-cli/src/commands/dashboard.ts) - this is the actual, only
+// producer of these messages, not an inferred/guessed shape.
+export interface WsSyncEvent {
+  type: string;
+  path: string;
+}
+
+export type WsMessage =
+  | { type: "init"; data: { pulse: PulseData; graph: GraphData } }
+  | {
+      type: "sync";
+      data: { pulse: PulseData; graph: GraphData };
+      event?: WsSyncEvent;
+    }
+  | { type: "agent_focus"; id: string }
+  | { type: "lock_update"; path: string; locked: boolean; agentId: string }
+  | { type: "connected" };

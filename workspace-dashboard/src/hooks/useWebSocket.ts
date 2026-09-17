@@ -1,6 +1,7 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from "react";
+import type { WsMessage } from "../types.js";
 
-export type WsMessageHandler = (message: any) => void;
+export type WsMessageHandler = (message: WsMessage) => void;
 
 export interface UseWebSocketReturn {
   send: (msg: object) => void;
@@ -12,7 +13,10 @@ interface UseWebSocketOptions {
   onConnectionChange: (connected: boolean) => void;
 }
 
-export function useWebSocket({ onMessage, onConnectionChange }: UseWebSocketOptions) {
+export function useWebSocket({
+  onMessage,
+  onConnectionChange,
+}: UseWebSocketOptions) {
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectDelay = useRef(1000);
 

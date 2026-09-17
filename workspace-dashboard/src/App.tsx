@@ -1,25 +1,38 @@
-import { useMemo, useCallback } from 'react';
-import { useWebSocket } from './hooks/useWebSocket.js';
-import { useWorkspaceState } from './hooks/useWorkspaceState.js';
-import AetherGraph from './components/AetherGraph';
-import ErrorBoundary from './components/ErrorBoundary';
-import HudHeader from './components/HudHeader';
-import HudSidebar from './components/HudSidebar';
-import HudFooter from './components/HudFooter';
-import NodeInspector from './components/NodeInspector';
-import GraphFilterBar from './components/GraphFilterBar';
-import ContextMenu from './components/ContextMenu';
-import TimelinePanel from './components/TimelinePanel';
-import type { NodeData } from './types.js';
+import { useMemo, useCallback } from "react";
+import type { LinkObject } from "react-force-graph-3d";
+import { useWebSocket } from "./hooks/useWebSocket.js";
+import { useWorkspaceState } from "./hooks/useWorkspaceState.js";
+import AetherGraph from "./components/AetherGraph";
+import ErrorBoundary from "./components/ErrorBoundary";
+import HudHeader from "./components/HudHeader";
+import HudSidebar from "./components/HudSidebar";
+import HudFooter from "./components/HudFooter";
+import NodeInspector from "./components/NodeInspector";
+import GraphFilterBar from "./components/GraphFilterBar";
+import ContextMenu from "./components/ContextMenu";
+import TimelinePanel from "./components/TimelinePanel";
+import type { NodeData, EdgeData } from "./types.js";
+
+// react-force-graph-3d (rendered by AetherGraph) resolves link source/target
+// from string IDs to the actual node object in place once its simulation
+// starts - state.graphData.links can hold either shape by the time this runs.
+// Omit source/target from EdgeData: it declares them as plain `string`,
+// which would intersect down to just `string` and make the library's own
+// broader `source?: string | number | NodeObject<NodeData>` unreachable.
+type FgLink = LinkObject<NodeData, Omit<EdgeData, "source" | "target">>;
 
 function App() {
   const state = useWorkspaceState();
   const { send } = useWebSocket({
     onMessage: state.handleMessage,
-    onConnectionChange: useCallback((connected: boolean) => {
-      state.setIsConnected(connected);
-      if (!connected) state.setTicker(`AETHER CORE: LINK SEVERED. RECONNECTING...`);
-    }, [state.setIsConnected, state.setTicker]),
+    onConnectionChange: useCallback(
+      (connected: boolean) => {
+        state.setIsConnected(connected);
+        if (!connected)
+          state.setTicker(`AETHER CORE: LINK SEVERED. RECONNECTING...`);
+      },
+      [state.setIsConnected, state.setTicker],
+    ),
   });
 
   const visibleGraphData = useMemo(() => {
@@ -27,21 +40,37 @@ function App() {
     if (!q) return state.graphData;
     const matchedIds = new Set(
       state.graphData.nodes
-        .filter(n => n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q))
-        .map(n => n.id)
+        .filter(
+          (n) =>
+            n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q),
+        )
+        .map((n) => n.id),
     );
-    state.graphData.links.forEach((link: any) => {
-      const s = typeof link.source === 'object' ? link.source.id : link.source;
-      const t = typeof link.target === 'object' ? link.target.id : link.target;
-      if (matchedIds.has(s)) matchedIds.add(t);
-      if (matchedIds.has(t)) matchedIds.add(s);
-    });
+    for (const link of state.graphData.links) {
+      const l = link as unknown as FgLink;
+      const s = (typeof l.source === "object" ? l.source?.id : l.source) as
+        string | undefined;
+      const t = (typeof l.target === "object" ? l.target?.id : l.target) as
+        string | undefined;
+      if (s !== undefined && t !== undefined && matchedIds.has(s))
+        matchedIds.add(t);
+      if (s !== undefined && t !== undefined && matchedIds.has(t))
+        matchedIds.add(s);
+    }
     return {
-      nodes: state.graphData.nodes.filter(n => matchedIds.has(n.id)),
-      links: state.graphData.links.filter((l: any) => {
-        const s = typeof l.source === 'object' ? l.source.id : l.source;
-        const t = typeof l.target === 'object' ? l.target.id : l.target;
-        return matchedIds.has(s) && matchedIds.has(t);
+      nodes: state.graphData.nodes.filter((n) => matchedIds.has(n.id)),
+      links: state.graphData.links.filter((link) => {
+        const l = link as unknown as FgLink;
+        const s = (typeof l.source === "object" ? l.source?.id : l.source) as
+          string | undefined;
+        const t = (typeof l.target === "object" ? l.target?.id : l.target) as
+          string | undefined;
+        return (
+          s !== undefined &&
+          t !== undefined &&
+          matchedIds.has(s) &&
+          matchedIds.has(t)
+        );
       }),
     };
   }, [state.graphData, state.filterQuery]);
@@ -52,36 +81,48 @@ function App() {
   };
 
   const handlePulseNode = (id: string) => {
-    send({ type: 'action', action: 'pulse_node', payload: { id } });
+    send({ type: "action", action: "pulse_node", payload: { id } });
     state.setTicker(`AETHER ACTION: TRIGGERING FORCE PULSE [${id}]`);
   };
 
   const handleAcquireLock = (id: string) => {
-    send({ type: 'action', action: 'acquire_lock', payload: { path: id, agentId: 'dashboard' } });
+    send({
+      type: "action",
+      action: "acquire_lock",
+      payload: { path: id, agentId: "dashboard" },
+    });
     state.setTicker(`NEXUS: ACQUIRING LOCK [${id}]`);
   };
 
   const handleFilterToNode = (id: string) => {
-    state.setFilterQuery(id.split('/').pop() ?? id);
+    state.setFilterQuery(id.split("/").pop() ?? id);
   };
 
   return (
     <div
       className="relative w-screen h-screen overflow-hidden"
-      onContextMenu={e => e.preventDefault()} // suppress browser context menu globally
+      onContextMenu={(e) => e.preventDefault()} // suppress browser context menu globally
     >
       <div className="absolute inset-0 z-0">
         <ErrorBoundary>
           <AetherGraph
-            onNodeClick={(node: NodeData | null) => { state.setSelectedNode(node); state.setContextMenu(null); }}
-            onNodeRightClick={(node, x, y) => state.setContextMenu({ node, x, y })}
+            onNodeClick={(node: NodeData | null) => {
+              state.setSelectedNode(node);
+              state.setContextMenu(null);
+            }}
+            onNodeRightClick={(node, x, y) =>
+              state.setContextMenu({ node, x, y })
+            }
             graphData={visibleGraphData}
             focusedNodeId={state.focusedNodeId}
           />
         </ErrorBoundary>
       </div>
 
-      <GraphFilterBar value={state.filterQuery} onChange={state.setFilterQuery} />
+      <GraphFilterBar
+        value={state.filterQuery}
+        onChange={state.setFilterQuery}
+      />
 
       <div className="absolute inset-0 pointer-events-none z-10 grid grid-areas-hud gap-5 p-6 box-border">
         <HudHeader isConnected={state.isConnected} pulse={state.pulse} />
@@ -95,7 +136,7 @@ function App() {
         />
         <HudFooter
           ticker={state.ticker}
-          onTimelineToggle={() => state.setShowTimeline(v => !v)}
+          onTimelineToggle={() => state.setShowTimeline((v) => !v)}
           showTimeline={state.showTimeline}
         />
       </div>
