@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { useWebSocket } from '../hooks/useWebSocket.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+import { useWebSocket } from "../hooks/useWebSocket.js";
 
 // --- WebSocket mock ---
 
@@ -27,7 +27,7 @@ class MockWebSocket implements MockWebSocketInstance {
   send = vi.fn();
   readyState = 0;
 
-  constructor(_url: string) {
+  constructor() {
     mockInstances.push(this);
   }
 }
@@ -35,7 +35,7 @@ class MockWebSocket implements MockWebSocketInstance {
 beforeEach(() => {
   mockInstances = [];
   vi.useFakeTimers();
-  vi.stubGlobal('WebSocket', MockWebSocket);
+  vi.stubGlobal("WebSocket", MockWebSocket);
 });
 
 afterEach(() => {
@@ -43,8 +43,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('useWebSocket', () => {
-  it('reports disconnected state initially (before onopen fires)', () => {
+describe("useWebSocket", () => {
+  it("reports disconnected state initially (before onopen fires)", () => {
     const onMessage = vi.fn();
     const onConnectionChange = vi.fn();
 
@@ -54,7 +54,7 @@ describe('useWebSocket', () => {
     expect(onConnectionChange).not.toHaveBeenCalledWith(true);
   });
 
-  it('calls onConnectionChange(true) when WebSocket opens', () => {
+  it("calls onConnectionChange(true) when WebSocket opens", () => {
     const onMessage = vi.fn();
     const onConnectionChange = vi.fn();
 
@@ -68,7 +68,7 @@ describe('useWebSocket', () => {
     expect(onConnectionChange).toHaveBeenCalledWith(true);
   });
 
-  it('calls onMessage callback when a message is received', () => {
+  it("calls onMessage callback when a message is received", () => {
     const onMessage = vi.fn();
     const onConnectionChange = vi.fn();
 
@@ -79,7 +79,7 @@ describe('useWebSocket', () => {
       ws.onopen?.();
     });
 
-    const payload = { type: 'sync', data: { graph: {} } };
+    const payload = { type: "sync", data: { graph: {} } };
     act(() => {
       ws.onmessage?.({ data: JSON.stringify(payload) });
     });
@@ -87,7 +87,7 @@ describe('useWebSocket', () => {
     expect(onMessage).toHaveBeenCalledWith(payload);
   });
 
-  it('ignores malformed JSON messages without throwing', () => {
+  it("ignores malformed JSON messages without throwing", () => {
     const onMessage = vi.fn();
     const onConnectionChange = vi.fn();
 
@@ -99,13 +99,13 @@ describe('useWebSocket', () => {
     });
 
     act(() => {
-      ws.onmessage?.({ data: 'not valid json {{{' });
+      ws.onmessage?.({ data: "not valid json {{{" });
     });
 
     expect(onMessage).not.toHaveBeenCalled();
   });
 
-  it('reconnects with exponential backoff on disconnect', () => {
+  it("reconnects with exponential backoff on disconnect", () => {
     const onMessage = vi.fn();
     const onConnectionChange = vi.fn();
 
@@ -147,7 +147,7 @@ describe('useWebSocket', () => {
     expect(mockInstances).toHaveLength(3); // now reconnected
   });
 
-  it('caps reconnect delay at 30 seconds', () => {
+  it("caps reconnect delay at 30 seconds", () => {
     const onMessage = vi.fn();
     const onConnectionChange = vi.fn();
 
@@ -178,11 +178,13 @@ describe('useWebSocket', () => {
     expect(mockInstances.length).toBe(countBefore + 1);
   });
 
-  it('cleans up WebSocket on unmount', () => {
+  it("cleans up WebSocket on unmount", () => {
     const onMessage = vi.fn();
     const onConnectionChange = vi.fn();
 
-    const { unmount } = renderHook(() => useWebSocket({ onMessage, onConnectionChange }));
+    const { unmount } = renderHook(() =>
+      useWebSocket({ onMessage, onConnectionChange }),
+    );
 
     const ws = mockInstances[0];
     act(() => {
@@ -194,11 +196,13 @@ describe('useWebSocket', () => {
     expect(ws.close).toHaveBeenCalled();
   });
 
-  it('does not reconnect after unmount', () => {
+  it("does not reconnect after unmount", () => {
     const onMessage = vi.fn();
     const onConnectionChange = vi.fn();
 
-    const { unmount } = renderHook(() => useWebSocket({ onMessage, onConnectionChange }));
+    const { unmount } = renderHook(() =>
+      useWebSocket({ onMessage, onConnectionChange }),
+    );
 
     const ws = mockInstances[0];
     act(() => {
