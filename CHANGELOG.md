@@ -2,6 +2,15 @@
 
 All notable changes to the ContextOS platform will be documented in this file.
 
+## [1.13.3] - 2026-11-19 — Packaging hotfix (`@context-os/cli`, `@context-os/mcp`)
+
+### Fixed
+- **Uninstallable packages**: `@context-os/cli@1.13.2` and `@context-os/mcp@1.13.2` pinned `@context-os/core` to `1.13.1`, a version that was never published (core went from 1.12.0 to 1.13.2), so `npm install` failed with `ETARGET`. 1.13.3 pins `@context-os/core@1.13.2`, which exists.
+- Nothing else changes: the published files are identical to 1.13.2 apart from `package.json`, and `@context-os/core` stays at 1.13.2. 1.13.2 itself has no entry here; it was a version bump only (28e6ccc). This is a hotfix of the published packages and does not include the changes made on `develop` since.
+
+### Added
+- `scripts/check-internal-deps.js` and a CI job that fail when a workspace depends on another workspace at a version the repo does not have, so this cannot recur.
+
 ## [1.13.1] - 2026-05-25
 
 ### Architecture
