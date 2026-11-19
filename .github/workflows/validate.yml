@@ -25,6 +25,19 @@ jobs:
       - name: Lint dashboard
         run: npm run lint -w workspace-dashboard
 
+  # Plain node, no install or build: fast, and it stays meaningful while other jobs are red.
+  internal-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Internal dependency pins match the workspace versions
+        run: node scripts/check-internal-deps.js
+      - name: Guard tests
+        run: node --test scripts/check-internal-deps.test.js
+
   test:
     runs-on: ubuntu-latest
     strategy:
