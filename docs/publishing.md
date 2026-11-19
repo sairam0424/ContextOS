@@ -28,6 +28,8 @@ Before publishing, you must bump the version in **all 4 manifests**.
 - `workspace-cli/package.json` (Also update `@context-os/core` dependency version)
 - `workspace-mcp/package.json` (Also update `@context-os/core` dependency version)
 
+**Easiest and safest:** run `node scripts/sync-versions.js <version>`. It updates every manifest above, including the `@context-os/core` dependency in the CLI and MCP manifests, in one step. CI (`validate.yml`, job `internal-deps`) fails if one of those pins stops matching the workspace version; run `node scripts/check-internal-deps.js` to check locally.
+
 ### 2. Prepare the Build
 Run the root build command to ensure all TypeScript is compiled and templates are mirrored correctly.
 ```bash
@@ -53,6 +55,13 @@ npm publish -w workspace-cli --access public
 # 3. MCP (The Bridge)
 npm publish -w workspace-mcp --access public
 ```
+
+### 5. Verify the Install
+Publishing is not finished until the packages install from the registry. In an empty directory:
+```bash
+cd "$(mktemp -d)" && npm install @context-os/cli@<version> @context-os/mcp@<version> && ./node_modules/.bin/context-os --version
+```
+This is the check that would have caught `@context-os/cli@1.13.2` and `@context-os/mcp@1.13.2`: both pinned a core version that was never published, so neither could be installed.
 
 ---
 
